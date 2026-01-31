@@ -77,11 +77,28 @@ Python, NumPy, SciKit-Learn, Numba, CUDA, RAPIDS cuML, SRBench, DIGEN
 
 ## Environment Setup (Recommended)
 
+### Prerequisite: Conda Installation
+
+Before setting up the M5GP 2.0 environment, **Conda must be installed** on your system.  
+We recommend installing **Miniconda** or **Anaconda**, depending on your preference.
+
+- Miniconda (lightweight, recommended): https://docs.conda.io/en/latest/miniconda.html  
+- Anaconda (full distribution): https://www.anaconda.com/products/distribution  
+
+After installation, verify that Conda is available by running:
 ```bash
-conda create -n rapids-25.04 \
-  -c rapidsai -c conda-forge -c nvidia \
-  rapids=25.04 python=3.12 cudatoolkit=11.5
-conda activate rapids-25.04
+conda --version
+```
+
+Once Conda is correctly installed, proceed with the environment setup below.
+
+
+```bash
+conda create -n rapids-25.12 -c rapidsai -c conda-forge \
+    cudf=25.12 cuml=25.12 cugraph=25.12 python=3.13 'cuda-version>=12.2,<=12.9' \
+    'pytorch=*=*cuda*' cudatoolkit=11.5
+
+conda activate rapids-25.12
 ```
 
 ```bash
