@@ -1,114 +1,167 @@
-# M5GP 
-M5GP Project
-M5GP 2.0
-Implementation of Genetic Programming algorithm in CUDA.
+# M5GP 2.0
+**Extensions and Enhancements to a Constructive Feature Induction System based on Genetic Programming**
+
+---
+
+## Overview
+
+**M5GP 2.0** is an open-source implementation of an advanced **Multidimensional Genetic Programming (GP)** framework designed for **symbolic regression** and **constructive feature induction**, with a strong focus on **interpretability, scalability, and GPU acceleration**.
+
+M5GP 2.0 **derives conceptually from the original M5GP framework**, but it is released as an **independent repository**, reflecting a substantial redesign and consolidation of the algorithm, its evolutionary operators, numerical stability mechanisms, and GPU execution model.
+
+> **Note**  
+> Although M5GP 2.0 builds upon the ideas introduced in M5GP (v1), **this repository is fully independent**, with a clean history and a restructured codebase targeting large-scale, reproducible experimentation.
+
+---
+
+## Key Concepts
+
+M5GP 2.0 follows the **constructive feature induction paradigm**, where Genetic Programming is used to evolve **symbolic transformations of the input space**, and the resulting features are subsequently combined using **linear models** (e.g., Linear Regression or Ridge Regression).
+
+This hybrid symbolic–linear approach enables:
+- Compact and interpretable symbolic models
+- Competitive predictive performance
+- Efficient large-scale execution on GPUs
+
+---
+
+## Main Differences vs. M5GP (v1)
+
+### Algorithmic Enhancements
+- Adaptive **UMAD mutation operator** guided by function-level performance feedback
+- Expanded symbolic language with high-arity aggregation operators:
+  - `SUM`, `PRD`, `AVG`, `DSV`
+- Explicit numerical-stability mechanisms:
+  - Input/output normalization
+  - Bounded random constants
+  - Inclusion of fundamental constants (π and e)
+- **Ridge Regression (L2 regularization)** for improved robustness under multicollinearity
+
+### GPU and Systems-Level Improvements
+- Redesigned GPU execution model using **Numba CUDA JIT kernels**
+- Optimized GPU memory management, batching, and buffer reuse
+- Standardized **float32 arithmetic** for numerical consistency
+- Reduced CPU–GPU data transfers and improved parallel efficiency
+
+### Experimental Scope
+- Rigorous evaluation using **SRBench**
+- Reproducible configurations and scripts
+- Support for large-scale symbolic regression benchmarks
+
+---
+
+## Software Stack
+
 ```
-This is a Python implementation of  M5GP 2.0 programming algorithm.
-```
-***
-## Description:  
-M5GP implements a Scikit-Learn type interface using Python, the necessary methods are available for its evaluation and use, in addition a Regressor type object compatible with Scikit-Learn in Python was defined.
-
-Train/fit functions were defined in a base class of type Regressor.
-
-Established a dictionary of type hyper_params or a list of dictionaries specifying the hyperparameter search space
-
-A function has been defined that returns a sympy-compatible string that specifies the final model and can be manipulated in sympy.
-
-The integration of the Numba library and cuML within M5GP was carried out with the objective of using it as a variant of evaluation of the models obtained through GP and to improve the efficiency and suitability of the results.
-
-***
-## Software code languajes, tools, and services used
-```
-Python, SciKit-Learn, NUMBA, PYCUDA CUML, SRBENCH
-```
-***
-## Requirements, operating enviroments & dependencies 
-Python > 3.8 version <br>
-Conda  > 23.3 version <br>
-Conda Environment for rapidsai > 23.04 <br>
-Conda package scikit-cuda <br>
-Conda package scikit-learn <br>
-conda package pytorch <br>
-
-
-## Installation 
-1. Install the conda environment rapidsai: <br>
-conda create -n rapids-23.04 -c rapidsai -c conda-forge -c nvidia  rapids=23.04 python=3.8 cudatoolkit=11.5 [link](https://docs.rapids.ai/install) <br>
-conda activate rapids-23.04 <br>
-
-conda create -n rapids-25.04 -c rapidsai -c conda-forge -c nvidia rapids=25.04 python=3.12 cudatoolkit=11.5 [link](https://docs.rapids.ai/install) <br>
-conda activate rapids-25.04 <br>
-
-3. Install adition packages:
-pip install scikit-cuda <br>
-conda install -c conda-forge scikit-learn <br>
-conda install pytorch::pytorch <br>
-
-4. Download the M5GP source code:
-git clone https://github.com/armandocardenasf/m5gp.git
-
-***
-## How to run:  
-For execute M5GP type follows commands
-```
-> cd m5gp
-> python m5gp.py
-```
-
-For test execution, use m5gp_Test.py file for separate test execution, you must edit m5gp_test.py and  especify a path for a data file, save and type follows commands
-```
-> cd m5gp
-> pyhton m5gp_Test.py
+Python, NumPy, SciKit-Learn, Numba, CUDA, RAPIDS cuML, SRBench, DIGEN
 ```
 
-Set the parameters for M5GP execution
+---
 
-***
-## Parameters:  
-The folllow parameters are passed to Regressor object for M5GP execution modify the parameters accordingly to adjust to the desired evolutionary conditions
+## Requirements
 
-| Parameter Name     								| Default Value   | Description|
-| -------- 								| -------- |------------|
-|1.  Generations				| 30     |Total number of iterations of the main evolutionary loop. |
-|2.  Individuals				| 256     |Number of individuals generated in the population.|
-|3.  GenesIndividuals      | 128     |Number of genes of each individual in the population.|
-|4.  MutationProb          | 0.10   |Mutation rate probability. For UMAD probability operator.| 
-|5.  MutationDeleteRateProb     | 0.01      |Mutation delete probability.  For UMAD probability operator.|
-|6.  SizeTournament          | 0.15   |Size of elitist tournament.| 
-|7.  EvaluationMethod          | 0   |Error evaluation method. <br><b>M5GP native methods:</b><br>0=RMSE<br>1=R2 <br><b>cuML Methods:</b><br>2=LinearRegression<br> 3=Lasso Regression<br>4=Ridge regression<br>5=kernel Ridge Regression<br>6=ElasticNet Regression<br><b>cuML MiniBatch options:</b><br>7=MiniBatch none regularization (linear regression)<br>8=MiniBatch lasso regularization <br>9=MiniBatch ridge regularization <br>10=MiniBatch elasticnet regularization | 
-|7.  MaxRandomConstant			| 80       |Maximum / Minimum range values of the random constants used. Whatever the value, negative constants of the same magnitude are also generated in the range of -Range to +Range.|
-|8.  GenOperatorProb         | 0.5     |Probability of generating a gene corresponding to an operator (+ - * / sin cos, log ...).|
-|9.  GenVariableProb         | 0.5     |Probability of generating a gene corresponding to a variable.|
-|10.  GenConstantProb         | 0.5     |Probability of generating a gene corresponding to a constant.|
-|11.  GenNoopProb         | 0.5     |Probability of generating a gene corresponding to Noop (no valid gene).|
-|12.  UseOpIF         | 0.5     |Specifies whether IF conditional operators will be used on the individual.|
-|13.  Log         | 0.5     |Determines if results will be recorded in Log file.|
-|14.  Verbose         | 0.5     |Specifies if results are shown on the screen during program execution.|
-|15.  Log Path                           | log/     |Directory where the files generated by M5GP will be stored.|
+### Software
+- Python ≥ 3.8
+- Conda ≥ 23.x
+- RAPIDS cuML
+- Numba
+- scikit-learn
+- scikit-cuda
+- PyTorch (optional)
 
+### Hardware
+- NVIDIA GPU with CUDA support
+- CUDA Toolkit compatible with RAPIDS version
 
+---
 
-## Documentation:
-```
-The documentation of the library is a Doxygen documentation. The implementation has been done in order to use the library after a very quick reading of the documentation.
+## Environment Setup (Recommended)
+
+```bash
+conda create -n rapids-25.04 \
+  -c rapidsai -c conda-forge -c nvidia \
+  rapids=25.04 python=3.12 cudatoolkit=11.5
+conda activate rapids-25.04
 ```
 
-## References 
-1. Cardenas, L. A., Trujillo, L., Hernández, D., Muñoz, J M. (2024) <br>
-M5GP: Parallel Multidimensional Genetic Programming with Multidimensional Populations for Symbolic Regression <br>
-Mathematical and Computational Applications Journal, MDPI. [DOI](https://doi.org/https://doi.org/10.3390/mca1010000) <br>
+```bash
+pip install scikit-cuda
+conda install -c conda-forge scikit-learn
+conda install pytorch::pytorch
+```
 
+---
 
- ## Institutions
-1. Departamento de Ingeniería Eléctrica Electrónica, Posgrado en Ciencias de la Ingeniería, Tecnológico Nacional de México/IT de Tijuana, Tijuana BC 22414, Mexico <br>
-2. División de Estudios de Posgrado, Maestría en Sistemas Computacionales, Tecnológico Nacional de México/IT de La Paz,  La Paz BCS 23080, Mexico <br>
-3. Departamento de Sistemas y Computación, Tecnológico Nacional de México/IT de Ensenada, Ensenada BC 22780, Mexico <br>
+## Installation
 
- ## Funding
-This work was supported by CONAHCYT (Mexico) project CF-2023-I-724, TecNM (Mexico)
-projects 16788.23-P and 17756.23-P, and the last author was supported by CONAHCYT (Mexico)
-doctoral scholarship with CVU number 771416.
- 
+```bash
+git clone https://github.com/armandocardenasf/m5gp-2.0.git
+cd m5gp-2.0
+```
 
+---
+
+## Execution
+
+### Basic execution
+```bash
+python m5gp.py
+```
+
+### Test execution
+```bash
+python m5gp_test.py
+```
+
+---
+
+## Benchmarks and Reproducibility
+
+The repository provides scripts and configurations for:
+- **SRBench** (symbolic regression)
+- **DIGEN** (classification benchmarks)
+
+All experiments reported in the associated paper can be reproduced using the provided configurations.
+
+---
+
+## Documentation
+
+The codebase follows a **Doxygen-style documentation structure**, enabling rapid onboarding and direct use after minimal reading.
+
+---
+
+## References
+
+If you use this software, please cite:
+
+Cárdenas Florido, L., Trujillo, L., et al.  
+*M5GP 2.0: Extensions and Enhancements to a Constructive Feature Induction System based on Genetic Programming*  
+(Manuscript under review, 2026)
+
+Original M5GP reference:
+- Cárdenas Florido, L. et al.  
+  *M5GP: Parallel Multidimensional Genetic Programming for Symbolic Regression*  
+  Mathematical and Computational Applications, MDPI, 2024.  
+  https://doi.org/10.3390/mca29020025
+
+---
+
+## Institutions
+
+- Tecnológico Nacional de México / IT de Ensenada
+- Tecnológico Nacional de México / IT de Tijuana
+- Tecnológico Nacional de México / IT de La Paz
+
+---
+
+## Funding
+
+This research is supported by **TecNM (Mexico)**.
+
+---
+
+## License
+
+To be defined before the first stable public release.
 
