@@ -1,0 +1,12 @@
+
+__pycache__/
+__pycache__/*
+*.pyc
+*.py[cod]
+graphics/
+results/
+jupyter/
+graphics/*
+results/*
+jupyter/*
+ 
