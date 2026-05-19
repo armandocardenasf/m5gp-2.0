@@ -507,8 +507,8 @@ def compute_individuals(inputPopulation: np.ndarray,
 				if math.isnan(out) or math.isinf(out):
 					out = gpG.MIN_RMSE
 
-				if(math.isnan(out) or math.isinf(out)) :
-					out = gpG.MIN_RMSE
+				#if(math.isnan(out) or math.isinf(out)) :
+				#	out = gpG.MIN_RMSE
 
 				uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
 				pushGenes += 1						
@@ -572,7 +572,7 @@ def compute_individuals(inputPopulation: np.ndarray,
 				tmp = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]	
 
 				if math.isnan(tmp) or math.isinf(tmp):
-					tmp = 1e308
+					tmp = gpG.MIN_RMSE
 				
 				eps = 1e-8
 				out = math.sqrt(math.fabs(tmp) + eps)

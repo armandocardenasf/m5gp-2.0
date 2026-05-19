@@ -27,6 +27,7 @@ from sklearn.model_selection import train_test_split
 #dataset1 = pd.DataFrame(pd.read_csv("/home/acardenasf/datasets/218_house_8L.tsv" ,sep='\t', header=None))
 
 dsFile = "/home/acardenasf/datasets/1089_USCrime.tsv"
+#dsFile = "/home/acardenasf/datasets/218_house_8L.tsv"
 
 dataset1 = pd.DataFrame(pd.read_csv(dsFile ,sep='\t', header=None))
 
@@ -47,39 +48,54 @@ y = dataset.iloc[:nrows, nvar-1]
 x_train = dataset.iloc[0:nrows, 0:nvar-1].to_numpy().astype(np.float32)
 y_train = dataset.iloc[:nrows, nvar-1].to_numpy().astype(np.float32)
 
-# # generate train/test split
-# X_train, X_test, y_train, y_test = train_test_split(features, labels,
-#                                                 train_size=0.75,
-#                                                 test_size=0.25,
-#                                                 random_state=random_state)
+split = True
+if (split): 
+    print("Splitting data into train and test sets...")
+    # generate train/test split
+    X_train, X_test, Y_train, Y_test = train_test_split(x_train, y_train,
+                                                    train_size=0.75,
+                                                    test_size=0.25,
+                                                    random_state=42)
+else:
+    X_train = x_train
+    Y_train = y_train
+    X_test = x_train
+    Y_test = y_train
 
 scaled = True
 if (scaled): 
-    print('scaling train X')
+    print('Scaling train and test data X...')
     sc_X = StandardScaler() 
-    X_train_scaled = sc_X.fit_transform(x_train)
+    X_train_scaled = sc_X.fit_transform(X_train)
+    X_test_scaled = sc_X.fit_transform(X_test)
 
-    print('scaling train y')
+    print('Scaling train and test data Y...')
     sc_y = StandardScaler()
-    y_train_scaled = sc_y.fit_transform(y_train.reshape(-1,1)).flatten()
+    Y_train_scaled = sc_y.fit_transform(Y_train.reshape(-1,1)).flatten()
+    Y_test_scaled = sc_y.fit_transform(Y_test.reshape(-1,1)).flatten()
 
     #Set train data (x, y)
-    x_train = X_train_scaled
-    y_train = y_train_scaled
+    X_train = X_train_scaled
+    Y_train = Y_train_scaled
+    X_test = X_test_scaled
+    Y_test = Y_test_scaled
+    
+    
+print(X_train.shape, Y_train.shape)
+print(X_test.shape, Y_test.shape)
 
-#X_train, X_test, y_train, y_test = train_test_split(X,y,train_size=0.70,test_size=0.30,random_state=n)
 
 #functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "abs", "sum","prod", "avg", "std"]
 #Operadores = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "abs"]
 #functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "sqrt", "exp", "log", "abs"]
-functions_set = ["+", "-", "*", "/", "sin", "cos", "sqrt", "exp", "log", "abs"]
+functions_set = ["+", "-", "*", "/", "sin", "cos", "tan",  "exp", "sqrt", "log", "std", "avg"]
 #functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "abs"]
 
 print('Running m5gp ...')  
  
-est = m5gp( generations=30, # number of generations (limited by default) (40) (30)
-            Individuals=640, # number of individuals (512) (256)
-            GenesIndividuals=64, # number of genes per individual (64) (128)
+est = m5gp( generations=60, # number of generations (limited by default) (40) (30)
+            Individuals=512, # number of individuals (512) (256)
+            GenesIndividuals=160, # number of genes per individual (64) (128)
             mutationProb=0.1, # mutation rate probability (0.1) (0.1)
             mutationDeleteRateProb=0.01,  # mutation delete rate probality (0.05) (0.01)
             sizeTournament=0.15, # size of tournament (0.15) (0.15)
@@ -117,7 +133,7 @@ est = m5gp( generations=30, # number of generations (limited by default) (40) (3
 
 #ea.cudacapabilities()
 
-est.fit(x_train, y_train)
+est.fit(X_train, Y_train)
 
 print("Complexity: ", est.complexity())
 model = est.get_model()
@@ -125,7 +141,7 @@ print("Model: ",est.get_model())
 #D = simplify(model)
 #print(D)
 
-yPredicted = est.predict(x_train)
+yPredicted = est.predict(X_test)
 
 # print('scaling test Y')
 # sc_Y = StandardScaler() 
@@ -137,7 +153,7 @@ yPredicted = est.predict(x_train)
 #print("Y Data :\n", y_train)
 #print("Y Predicted:\n", yPredicted)
 
-mse = est.meanSquaredError(y_train, yPredicted)
+mse = est.meanSquaredError(Y_test, yPredicted)
 print("mse: ", mse)
-print("rmse:", est.rmse(y_train, yPredicted))
-print ("R^2: ", est.R2(y_train, yPredicted))
+print("rmse:", est.rmse(Y_test, yPredicted))
+print ("R^2: ", est.R2(Y_test, yPredicted))

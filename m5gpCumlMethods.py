@@ -9,6 +9,8 @@ import math
 import time
 import copy
 
+from sklearn.model_selection import train_test_split
+
 try:
     import cupy as cp
     GPU_CUPY = True
@@ -29,6 +31,8 @@ import numpy as np
 
 try:
     import cuml as cu
+    from cuml import train_test_split
+    
     from cuml import LinearRegression
     from cuml.linear_model import LinearRegression
     from cuml import Ridge
@@ -205,12 +209,17 @@ def ExecCuml(nProc, hFit,  st, mFitness, indiv, genes, nrows, hStackIdx, y_train
         cX = cp.asarray(sX_train, dtype=cp.float32)
         cY = cp.asarray(y_train, dtype=cp.float32)
 
+        cX_train, cX_test, cY_train, cY_test = train_test_split(cX, cY,
+                                                    train_size=0.80,
+                                                    test_size=0.20,
+                                                    random_state=42)
+        
         try:
             # Procesamos el Fit con el arreglo transformado
-            reg = slr.fit(cX, cY)
+            reg = slr.fit(cX_train, cY_train)
     
             # Creamos un vector de coeficientes
-            coefArr = reg.coef_
+            #coefArr = reg.coef_
             
             #creamos un vector de valores de interceps
             if(math.isnan(reg.intercept_) or math.isinf(reg.intercept_)) :
@@ -218,7 +227,7 @@ def ExecCuml(nProc, hFit,  st, mFitness, indiv, genes, nrows, hStackIdx, y_train
             else :
                 intercepArr = reg.intercept_
 
-            yPred = slr.predict(cX)
+            yPred = slr.predict(cX_test)
 
             cuModel= copy.deepcopy(slr)
 
@@ -230,18 +239,18 @@ def ExecCuml(nProc, hFit,  st, mFitness, indiv, genes, nrows, hStackIdx, y_train
             else :
                 if (scorer==0) or (scorer==1):
                     # Se hace la evaluacion utilizando MSE
-                    mse = cuMSE(cY, yPred, squared=True)
+                    mse = cuMSE(cY_test, yPred, squared=True)
                 else :
                     # Se hace la evaluacion utilizando R2
-                    mse = cuR2(cY, yPred)
+                    mse = cuR2(cY_test, yPred)
         except Exception as e:
             # Se ejecuta si ocurre cualquier error
             if (scorer==0) or (scorer==1):
                 mse = gpG.MAX_RMSE
             else :
                 mse = gpG.MAX_R2_NEG
-            coefArr = 0
-            intercepArr = 0
+            #coefArr = 0
+            #intercepArr = 0
             cuModel = copy.deepcopy(slr)
         #end Try/Catch
     else :      
@@ -249,8 +258,8 @@ def ExecCuml(nProc, hFit,  st, mFitness, indiv, genes, nrows, hStackIdx, y_train
             mse = gpG.MAX_RMSE
         else :
             mse = gpG.MAX_R2_NEG
-        coefArr = 0
-        intercepArr = 0
+        #coefArr = 0
+        #intercepArr = 0
         cuModel = copy.deepcopy(slr)
     #endif
 
@@ -364,8 +373,16 @@ def EvaluateCuml2(self, hStack, hStackIdx, hFit, y_train) :
 
         # Agregamos el modelo CUML del individuo en un arreglo
         cuModel.insert(i,slr2)
-        intercepArr.insert(i,slr2.intercept_)
-        coefArr.insert(i,slr2.coef_)
+        
+        try:
+            intercepArr.insert(i,slr2.intercept_)
+        except Exception as e:
+            intercepArr.insert(i,0)
+
+        try:
+            coefArr.insert(i,slr2.coef_)
+        except Exception as e:
+            coefArr.insert(i,[])
 
         # elapsed3 = time.time() - start_time2 - elapsed2 
         # print("EvaluateCuml2 3 ", elapsed3)

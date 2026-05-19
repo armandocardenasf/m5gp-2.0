@@ -175,9 +175,9 @@ def actualizar_pesos_operadores(
         fit_curr,          # fitness de la generación actual
         operator_ids,      # set con todos los ids válidos de operadores
         lower_is_better=True, # True si menor es mejor (ej. RMSE)
-        alpha_up=0.35,      # factor de incremento cuando mejora (0.2)
-        beta_down=0.25,    # factor de decremento cuando no mejora (0.15)
-        min_peso=1e-6      # piso para no anular operadores
+        alpha_up=0.08,      # factor de incremento cuando mejora (0.2)
+        beta_down=0.08,    # factor de decremento cuando no mejora (0.15)
+        min_peso=1e-4      # piso para no anular operadores
     ):
     """
     Ajusta los pesos de los operadores según el fitness.
