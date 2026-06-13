@@ -213,7 +213,11 @@ def ExecCuml(nProc, hFit,  st, mFitness, indiv, genes, nrows, hStackIdx, y_train
                                                     train_size=0.80,
                                                     test_size=0.20,
                                                     random_state=42)
-        
+        # cX_train = cX
+        # cX_test = cX
+        # cY_train = cY
+        # cY_test = cY
+         
         try:
             # Procesamos el Fit con el arreglo transformado
             reg = slr.fit(cX_train, cY_train)

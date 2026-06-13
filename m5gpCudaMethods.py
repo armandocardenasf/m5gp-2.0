@@ -33,35 +33,138 @@ import ctypes
 import m5gpGlobals as gpG
 import m5gpMod2 as gpM2
 
+
+# ##########################################################################################
+# def get_cuda_grid_limits(device_id=0):
+# Get the maximum grid and block limits of the CUDA device using Numba.
+# This function queries the CUDA device properties to determine the maximum number of blocks per grid,
+# the maximum number of threads per block, and the maximum block dimensions.
+# This information is crucial for configuring CUDA kernel launches to ensure that they do not exceed 
+# the hardware limits of the GPU.
+# ##########################################################################################
+def get_cuda_grid_limits(device_id=0):
+    """
+    Consulta los límites máximos de grid y block del dispositivo CUDA usando Numba.
+    """
+
+    with cuda.gpus[device_id]:
+        dev = cuda.get_current_device()
+
+        limits = {
+            "device_id": device_id,
+            "name": dev.name.decode() if isinstance(dev.name, bytes) else dev.name,
+            "compute_capability": dev.compute_capability,
+
+            # Máximo número de bloques por dimensión del grid
+            "MAX_GRID_DIM_X": dev.MAX_GRID_DIM_X,
+            "MAX_GRID_DIM_Y": dev.MAX_GRID_DIM_Y,
+            "MAX_GRID_DIM_Z": dev.MAX_GRID_DIM_Z,
+
+            # Máximo número de hilos por bloque
+            "MAX_THREADS_PER_BLOCK": dev.MAX_THREADS_PER_BLOCK,
+
+            # Máximo tamaño del bloque por dimensión
+            "MAX_BLOCK_DIM_X": dev.MAX_BLOCK_DIM_X,
+            "MAX_BLOCK_DIM_Y": dev.MAX_BLOCK_DIM_Y,
+            "MAX_BLOCK_DIM_Z": dev.MAX_BLOCK_DIM_Z,
+
+            # Número de multiprocesadores
+            "MULTIPROCESSOR_COUNT": dev.MULTIPROCESSOR_COUNT,
+
+            # Tamaño del warp
+            "WARP_SIZE": dev.WARP_SIZE,
+        }
+
+    return limits
+
+# ##########################################################################################
+# def min_grid_size_to_avoid_low_occupancy_warning():
+# Calculate the minimum grid size to avoid low occupancy warnings on the GPU.
+# This is based on the number of streaming multiprocessors (SMs) available on the GPU.
+# A low occupancy warning occurs when there are not enough threads to fully utilize the GPU's resources.
+# ##########################################################################################
+def min_grid_size_to_avoid_low_occupancy_warning():
+    dev = cuda.get_current_device()
+    sm_count = dev.MULTIPROCESSOR_COUNT
+    return 2 * sm_count
+
+# ##########################################################################################
+# def get_gpu_memory_info():
+# Get the free and total GPU memory using CUDA API calls.
+# This can be used to monitor GPU memory usage and prevent out-of-memory errors.
+# ##########################################################################################
 def get_gpu_memory_info():
     free = ctypes.c_size_t()
     total = ctypes.c_size_t()
     cuda.cuMemGetInfo(ctypes.byref(free), ctypes.byref(total))
     return free.value, total.value
 
-def gpuMaxUseProc(Individuals) :
-	#blocksize = 1024 
-	threads_per_block = 256
+
+# ##########################################################################################
+# def gpuMaxUseProc(Individuals) :
+# Calculate the optimal block size and grid size for launching CUDA kernels based on the number of individuals.
+# This function ensures that the number of threads per block does not exceed the maximum 
+# allowed (1024) and that the total number of threads covers all individuals.
+# ##########################################################################################
+def gpuMaxUseProc(total_items, threads_per_block=512):
+	total_items = int(total_items)
+	threads_per_block = int(threads_per_block)
+ 
+	min_grid = min_grid_size_to_avoid_low_occupancy_warning()
+	#print("GridSize mínimo recomendado:", min_grid)
+
+	if total_items <= 0:
+		return {
+			"GridSize": 0,      
+			"BlockSize": threads_per_block
+		}
+  
+	#threads_per_block = (threads_per_block // 32) * 32
+  
+	if threads_per_block > 1024:
+		threads_per_block = 1024
     
-	blocks = (Individuals + threads_per_block - 1) // threads_per_block  # Redondeo hacia arriba
+	if total_items <= 512:
+		threads_per_block = 1
+		blocks = (total_items + threads_per_block - 1) // threads_per_block  # Redondeo hacia arriba
+		#print("Total items 1: ", total_items, " GridSize: ", blocks , 	" BlockSize: ", threads_per_block)
 
-	while(blocks > 1024) :
-		if  (threads_per_block == 1):
-			threads_per_block = 0
-		threads_per_block = threads_per_block + 32
-		blocks = (Individuals + threads_per_block - 1) // threads_per_block  # Redondeo hacia arriba
-	
-	#gridsize=(Individuals + blocksize-1) // blocksize
-	
-	#MaxOcup = {}
-	#MaxOcup["BlockSize"] = gridsize
-	#MaxOcup["GridSize"] = blocksize	
+		if (blocks < min_grid):
+			blocks = min_grid
+			#print("Ajustando GridSize a mínimo recomendado:", blocks)
+   
+		return {
+			"GridSize": blocks,      
+			"BlockSize": threads_per_block
+		}
+      
+#    if threads_per_block == 1:
+	if  (threads_per_block == 1):
+		threads_per_block = 32
+  
+	#blocks = (total_items + threads_per_block - 1) // threads_per_block  # Redondeo hacia arriba
+	blocks = math.ceil(total_items / threads_per_block) # Redondeo hacia arriba
+	#print("Total items 2: ", total_items, " GridSize: ", blocks , 	" BlockSize: ", threads_per_block)
+  
+	if (blocks < min_grid):
+		blocks = min_grid
+		#print("Ajustando GridSize a mínimo recomendado:", blocks)
+		
+	#blocks = (total_items + threads_per_block - 1) // threads_per_block  # Redondeo hacia arriba
+	#print("Total items 3: ", total_items, " GridSize: ", blocks , 	" BlockSize: ", threads_per_block)
+	return {
+		"GridSize": blocks,
+		"BlockSize": threads_per_block
+	}
+		
+    
 
-	MaxOcup = {}
-	MaxOcup["BlockSize"] = threads_per_block
-	MaxOcup["GridSize"] = blocks
-	return MaxOcup
-
+# ######################################################################################
+# def Truncate(f, n) :
+# Truncate a floating-point number f to n decimal places.
+# This is used to reduce the precision of constants and variables, 
+# which can help prevent overflow and improve numerical stability in GPU computations.
+# ######################################################################################
 @cuda.jit()
 def Truncate(f, n) :
 	if (f < 0) :
@@ -76,6 +179,99 @@ def Truncate(f, n) :
 #@cuda.jit(nopython=True)
 #def empty():
 #    return np.empty(5, np.float64)  # np.float64 instead of np.float
+
+# *************************************************************************************
+# def safe_is_valid(x):
+# Check if a numerical value is valid for use in a mathematical operation
+# this is used to prevent NaN and Inf values from propagating through the calculations
+# *************************************************************************************
+@cuda.jit(device=True)
+def safe_is_valid(x):
+    return (not math.isnan(x)) and (not math.isinf(x))
+
+# #########################################################
+# def safe_is_stable(x, limit):
+# Check if a numerical value is stable for use in a mathematical operation
+# Returns True only if x is finite and within the safe range.
+# This is used to prevent NaN and Inf values from propagating through the calculations
+# #########################################################
+@cuda.jit(device=True)
+def safe_is_stable(x, limit):
+    if math.isnan(x) or math.isinf(x):
+        return False
+
+    if x > limit:
+        return False
+
+    if x < -limit:
+        return False
+
+    return True
+
+# #########################################################
+# def safe_add_would_overflow(a, b, limit):
+# Check if a + b would fall outside the safe range.
+# Do not perform the addition if it detects a risk.
+# #########################################################
+@cuda.jit(device=True)
+def safe_add_would_overflow(a, b, limit):
+    if not safe_is_stable(a, limit):
+        return True
+
+    if not safe_is_stable(b, limit):
+        return True
+
+    if b > 0.0 and a > limit - b:
+        return True
+
+    if b < 0.0 and a < -limit - b:
+        return True
+
+    return False
+
+# #########################################################
+# def safe_mul_would_overflow(a, b, limit):
+# Check if a * b would fall outside the safe range.
+# Do not perform the multiplication if it detects a risk.
+# #########################################################
+@cuda.jit(device=True)
+def safe_mul_would_overflow(a, b, limit):
+    if not safe_is_stable(a, limit):
+        return True
+
+    if not safe_is_stable(b, limit):
+        return True
+
+    if a == 0.0 or b == 0.0:
+        return False
+
+    abs_a = math.fabs(a)
+    abs_b = math.fabs(b)
+
+    if abs_a > limit / abs_b:
+        return True
+
+    return False
+
+##################################################################################
+# def safe_float_equal(a, b, eps):
+# Safe equality for floating-point numbers.
+# Use relative tolerance to avoid comparing directly with ==.
+# This is used to determine if two floating-point numbers are effectively equal,
+# which can help prevent issues with numerical precision in GPU computations.
+# ################################################################################
+@cuda.jit(device=True)
+def safe_float_equal(a, b, eps):
+    abs_a = math.fabs(a)
+    abs_b = math.fabs(b)
+
+    scale = abs_a
+    if abs_b > scale:
+        scale = abs_b
+
+    scale = scale + 1.0
+
+    return math.fabs(a - b) <= eps * scale
 
 @cuda.jit(device=True)
 def div_protegida_device(a, b, eps=1e-12):
@@ -153,6 +349,15 @@ def gen_rand_operator(cu_states, tid, operadores, cdf: np.ndarray, useOpIF) -> f
 	#Fin de If
 	return gene
 
+# #############################################################################################################
+# def initialize_population (cu_states, dInitialPopulation, numIndividuals, nvar, 
+# 							sizeMaxDepthIndividual, maxRandomConstant, genOperatorProb, 
+# 							genVariableProb, genConstantProb, genNoopProb, useOpIF) :
+# Initialize the population of individuals on the GPU.
+# Each gene is generated based on the specified probabilities for operators, variables, constants, and NOOPs.
+# The function uses CUDA random number generation to create a diverse initial population 
+# while respecting the constraints of the problem.
+# #############################################################################################################
 @cuda.jit
 def initialize_population (cu_states,
         dInitialPopulation: np.ndarray,
@@ -290,6 +495,14 @@ def create_array(num):
 	new_array = np.empty((num), dtype=np.int32)
 	return new_array
 
+# #############################################################################################################
+# def compute_individuals(inputPopulation, outIndividuals, data, numIndividuals, nrowTrain, hStack, 
+# 							hStackIdx, evaluationMethod) :
+# Compute the output of each individual in the population on the training data using CUDA.
+# This function evaluates the expression represented by each individual for each training instance,
+# using a stack-based approach to handle the operations and operands.
+# The results are stored in outIndividuals, which can then be used for fitness evaluation.
+# #############################################################################################################
 @cuda.jit
 def compute_individuals(inputPopulation: np.ndarray,
                         outIndividuals: np.ndarray,
@@ -390,7 +603,7 @@ def compute_individuals(inputPopulation: np.ndarray,
 				if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) :
 					pushGenes -=  1
 					tmp2 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]					
-					if (not math.isnan(tmp) and not math.isinf(tmp) and not math.isnan(tmp2) and not math.isinf(tmp2)) :
+					if (safe_is_valid(tmp) and safe_is_valid(tmp2)) :	
 						out = tmp - tmp2
 						uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
 						pushGenes += 1						
@@ -408,8 +621,8 @@ def compute_individuals(inputPopulation: np.ndarray,
 				tmp = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]				
 				if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) :
 					pushGenes -=  1
-					tmp2 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]						
-					if (not math.isnan(tmp) and not math.isinf(tmp) and not math.isnan(tmp2) and not math.isinf(tmp2)) :
+					tmp2 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]
+					if (safe_is_valid(tmp) and safe_is_valid(tmp2)) :
 						out = tmp * tmp2
 						uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
 						pushGenes += 1							
@@ -428,7 +641,7 @@ def compute_individuals(inputPopulation: np.ndarray,
 				if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) :	
 					pushGenes -=  1
 					tmp2 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]	
-					if (not math.isnan(tmp) and not math.isinf(tmp) and not math.isnan(tmp2) and not math.isinf(tmp2)) :
+					if (safe_is_valid(tmp) and safe_is_valid(tmp2)) :
 						out = tmp / math.sqrt(1 + (tmp2 * tmp2))
 						#out = div_protegida_device(tmp,tmp2, 1e-12) # division protegida
 
@@ -640,7 +853,8 @@ def compute_individuals(inputPopulation: np.ndarray,
 			if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) :
 				pushGenes -=  1
 				tmp = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]		
-				if (not math.isnan(tmp) and not math.isinf(tmp)) :
+				#if (not math.isnan(tmp) and not math.isinf(tmp)) :
+				if (safe_is_valid(tmp)) :
 					out = math.fabs(tmp) 
 
 					if(math.isnan(out) or math.isinf(out)) :
@@ -651,303 +865,445 @@ def compute_individuals(inputPopulation: np.ndarray,
 						stackModel[tidSem*sizeMaxDepthIndividual + pushModel]= inputPop
 						pushModel += 1	
 			continue	
-		# *************************** Es un operador de SUMATORIA ******************************/
-		# * Operador n-ario.  Se extraen todos los elementos del stack para sumarlos cada uno
-		#**********************************************************************************
-		elif (inputPop == gpG.OP_SUM) :  
-			cont = 0
-			out = 0
-			sum = 0
-			#continue
-			if (not isEmpty(pushGenes, sizeMaxDepthIndividual) ) :
-				cont = 1
-				
-				while (pushGenes > 0):
-					#Jalamos un  elemento del stack si hay
-					pushGenes -=  1
-					tmp = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]
-					if (not math.isnan(tmp) and not math.isinf(tmp)) :
-						# Haz la sumatoria
-						sum = sum + tmp
-						out = sum
-					
-				# Fin del While
-						
-				if (model == 1) :
-					stackModel[tidSem*sizeMaxDepthIndividual + pushModel]= inputPop
-					pushModel += 1	
-				#Fin del if
+		# ******************** Es un operador de SUMATORIA SEGURA ******************************
+		# n-ary operator. All elements are extracted from the stack and summed individually.
+		# Stability checks are performed at each step to prevent NaN and Inf.
+		# The summation is stopped if a risk (overflow, NaN, Inf) is detected.
+		#***************************************************************************************
+		elif (inputPop == gpG.OP_SUM):
 
-				if(math.isnan(out) or math.isinf(out)) :
-					out = gpG.MIN_RMSE	
-				uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
-				pushGenes += 1					
-			# Fin del if
-			continue
-		# *************************** Es un operador de PRODUCTO ******************************/
-		elif (inputPop == gpG.OP_PRD) :  
-			cont = 0
-			out = 0
-			prd = 1
-			#continue
-			if (not isEmpty(pushGenes, sizeMaxDepthIndividual) ) :
-				cont = 1
-				
-				while (pushGenes > 0):
-					#Jalamos un  elemento del stack si hay
-					pushGenes -=  1
-					tmp = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]
-					if (not math.isnan(tmp) and not math.isinf(tmp)) :
-						# Haz la sumatoria
-						prd = prd * tmp
-						out = prd
-					
-				# Fin del While
-						
-				if (model == 1) :
-					stackModel[tidSem*sizeMaxDepthIndividual + pushModel]= inputPop
-					pushModel += 1	
-				#Fin del if
+			acc_sum = 0.0
+			out = gpG.SAFE_AGG_FALLBACK
+			valid_count = 0
 
-				if(math.isnan(out) or math.isinf(out)) :
-					out = gpG.MIN_RMSE	
-				uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
-				pushGenes += 1					
-			# Fin del if
-			continue
-		# *************************** Es un operador de PROMEDIO ******************************/
-		elif (inputPop == gpG.OP_AVG) :  
-			cont = 0
-			out = 0
-			sum = 0
-			#continue
-			#if (not isEmpty(pushGenes, sizeMaxDepthIndividual) and pushGenes > 1) :
-			if (not isEmpty(pushGenes, sizeMaxDepthIndividual)) :
-				cont = 1
-				
-				while (pushGenes > 0):
-					#Jalamos un  elemento del stack si hay
-					pushGenes -=  1
-					tmp = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]
-					if (not math.isnan(tmp) and not math.isinf(tmp)) :
-						# Haz la sumatoria
-						sum = sum + tmp
-						cont += 1
-					#end if					
-				#end While				
-			
-				#Sacamos el promedio
-				out = sum / cont				
-						
-				if (model == 1) :
-					stackModel[tidSem*sizeMaxDepthIndividual + pushModel]= inputPop
-					pushModel += 1	
-				#Fin del if
-
-				if(math.isnan(out) or math.isinf(out)) :
-					out = gpG.MIN_RMSE	
-				uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
-				pushGenes += 1					
-			# Fin del if
-
-			continue
-		# *************************** Es un operador de DESV ESTANDARD ************************/
-		elif (inputPop == gpG.OP_SDV) :  
-			#print("Operador DevStd")
-			cont = 0
-			out = 0
-			sum = 0
-			prom = 0
-
-			if (not isEmpty(pushGenes, sizeMaxDepthIndividual)) :
-				cont = 0
+			if (not isEmpty(pushGenes, sizeMaxDepthIndividual)):
 
 				while (pushGenes > 0):
-					#Jalamos un  elemento del stack si hay
-					pushGenes -=  1
-					tmp = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]
-					if (not math.isnan(tmp) and not math.isinf(tmp)) :
-						# Haz la sumatoria
-						sum = sum + tmp
-						uArrayTmp[cont] = tmp
-						#np.append(arr1, tmp)
-						#arr1.append(tmp)
-						cont += 1
-					#end if					
-				#End While	
 
-				n1 = len(uArrayTmp)
-				# if n1 < 2:
-				# 	return 0.0 # Handle cases with less than 2 elements
+					# Se revisa el elemento superior, pero todavía NO se saca del stack
+					idx = tidSem * sizeMaxDepthIndividual + (pushGenes - 1)
+					tmp = uStack[idx]
 
-				# mean_val = np.sum(uArrayTmp) / n1
-				# squared_diffs = np.empty_like(uArrayTmp)
-				# for i in range(n):
-				# 	squared_diffs[i] = (uArrayTmp[i] - mean_val)**2
+					# Si el valor ya viene desbordado o disparado, se detiene la agregación
+					if not safe_is_stable(tmp, gpG.SAFE_AGG_MAX):
+						break
 
-				# variance = np.sum(squared_diffs) / (n - 1) # Using n-1 for sample standard deviation
-				# return np.sqrt(variance) 			
-			
-				#Sacamos el promedio
-				if (cont == 0):
-					cont = 1
-				prom = sum / cont
-				out = prom	
+					# Si sumar tmp dispararía el acumulado, se detiene antes de usarlo
+					if safe_add_would_overflow(acc_sum, tmp, gpG.SAFE_AGG_MAX):
+						break
 
-				s0 = 0
+					# Ahora sí se acepta el valor y se saca del stack
+					pushGenes -= 1
 
-				# #Calulamos la varianza
-				for ds in range(cont):
-					#s1 = math.fabs((uArrayTmp[ds] - prom) ** 2)
-					s1 = (uArrayTmp[ds] - prom) ** 2
-					s0 += s1
-				#End for
+					acc_sum = acc_sum + tmp
+					out = acc_sum
+					valid_count += 1
 
-				out= math.sqrt(s0 / cont) #Sacamos la desviacion standard
-				
-				if (model == 1) :
-					stackModel[tidSem*sizeMaxDepthIndividual + pushModel]= inputPop
-					pushModel += 1	
-				#End if
-							
-				if(math.isnan(out) or math.isinf(out)) :
-					out = gpG.MIN_RMSE	
-				uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
-				pushGenes += 1	
-			#End if
-			continue
+				# Solo se agrega salida si al menos un valor estable fue consumido
+				if valid_count > 0:
 
-    	# *************************** Es una condicion de IFMAYOR ******************************/
-		elif (inputPop == gpG.OP_IFG) :    #  Es IF MAYOR
-			if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) : #  Verificamos que haya un primer elemento
-				# Si hay, sacamos el primer elemento
-				pushGenes -=  1
-				tmp = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]					
-				if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) : # Verificamos si haya un segundo elemento
-					# Si hay, sacamos un segundo elemento
-					pushGenes -=  1
-					tmp2 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]
-					if (not math.isnan(tmp) or not math.isnan(tmp2)) :
-						if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) : # Verificamos que haya un tercer elemento
-							# Sacamos el tercer elemento
-							pushGenes -=  1
-							tmp3 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]							
-							if (tmp > tmp2 ) :  # Evaluamos la condicion con los primeros dos elementos obtenidos IFMAYOR
-								out = tmp3 	
-								uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
-								pushGenes += 1								
-							else :
-								if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) : # Si es falso, verificamos que haya un cuarto elemento para el ELSE   
-									# Sacamos el cuarto elemento
-									pushGenes -=  1
-									tmp4 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]										
-									out = tmp4 
-									uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
-									pushGenes += 1										
-								else : # No hay un cuarto elemento, regresamos los anteriores tres a la pila
-									uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp3
-									pushGenes += 1		
-									uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp2
-									pushGenes += 1									
-									uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp
-									pushGenes += 1									
-						else :
-							# No hay un tercer elemento, regresamos los anteriores dos a la pila
-							uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp2
-							pushGenes += 1							
-							uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp
-							pushGenes += 1
-				else :
-					#pushGenes = push(tmp,pushGenes,uStack[tidSem*sizeMaxDepthIndividual]) 
-					uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp
+					if (model == 1):
+						stackModel[tidSem * sizeMaxDepthIndividual + pushModel] = inputPop
+						pushModel += 1
+
+					uStack[tidSem * sizeMaxDepthIndividual + pushGenes] = out
 					pushGenes += 1
-			continue					
-		# *************************** Es una condicion de IFMENOR ******************************/
-		elif (inputPop == gpG.OP_IFL) : #  Es IF MENOR
-			if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) : #  Verificamos que haya un primer elemento
-				# Si hay, sacamos el primer elemento
-				pushGenes -=  1
-				tmp = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]									
-				if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) : # Verificamos si haya un segundo elemento
-					# Si hay, sacamos un segundo elemento
-					pushGenes -=  1
-					tmp2 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]					
-					if (not math.isnan(tmp) or not math.isnan(tmp2)) :
-						if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) : # Verificamos que haya un tercer elemento
-							# Sacamos el tercer elemento
-							pushGenes -=  1
-							tmp3 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]								
-							if (tmp < tmp2 ) :  # Evaluamos la condicion con los primeros dos elementos obtenidos IFMAYOR
-								out = tmp3 
-								uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
-								pushGenes += 1								
-							else :
-								if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) : # Si es falso, verificamos que haya un cuarto elemento para el ELSE
-									# Sacamos el cuarto elemento
-									pushGenes -=  1
-									tmp4 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]										
-									out = tmp4 
-									uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
-									pushGenes += 1									
-								else : # No hay un cuarto elemento, regresamos los anteriores tres a la pila
-									uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp3
-									pushGenes += 1		
-									uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp2
-									pushGenes += 1									
-									uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp
-									pushGenes += 1	
-						else : # No hay un tercer elemento, regresamos los anteriores dos a la pila
-							uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp2
-							pushGenes += 1							
-							uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp
-							pushGenes += 1
-				else :
-					uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp
-					pushGenes += 1			
-			continue							
-		# *************************** Es una condicion de IFIGUAL ******************************/
-		elif (inputPop == gpG.OP_IFE) : #  Es IF IGUAL
-			if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) : #  Verificamos que haya un primer elemento
-				# Si hay, sacamos el primer elemento
-				pushGenes -=  1
-				tmp = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]									
-				if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) : # Verificamos si haya un segundo elemento
-					# Si hay, sacamos un segundo elemento
-					pushGenes -=  1
-					tmp2 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]					
-					if (not math.isnan(tmp) or not math.isnan(tmp2)) :
-						if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) : # Verificamos que haya un tercer elemento
-							# Sacamos el tercer elemento
-							pushGenes -=  1
-							tmp3 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]								
-							if (tmp == tmp2 ) :  # Evaluamos la condicion con los primeros dos elementos obtenidos IFMAYOR
-								out = tmp3 
-								uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
-								pushGenes += 1								
-							else :
-								if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) : # Si es falso, verificamos que haya un cuarto elemento para el ELSE
-									# Sacamos el cuarto elemento
-									pushGenes -=  1
-									tmp4 = uStack[tidSem*sizeMaxDepthIndividual+pushGenes]										
-									out = tmp4 
-									uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = out
-									pushGenes += 1									
-								else : # No hay un cuarto elemento, regresamos los anteriores tres a la pila
-									uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp3
-									pushGenes += 1		
-									uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp2
-									pushGenes += 1									
-									uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp
-									pushGenes += 1	
-						else : # No hay un tercer elemento, regresamos los anteriores dos a la pila
-							uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp2
-							pushGenes += 1							
-							uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp
-							pushGenes += 1
-				else :
-					uStack[tidSem*sizeMaxDepthIndividual+pushGenes] = tmp
-					pushGenes += 1		
-			continue								
+
+			continue
+
+  		# ******************** Es un operador de PRODUCTO SEGURO ******************************
+		# n-ary operator. All elements are extracted from the stack and multiplied individually.
+		# Stability checks are performed at each step to prevent NaN and Inf.
+		# The product is stopped if a risk (overflow, NaN, Inf) is detected.
+		#***************************************************************************************
+		elif (inputPop == gpG.OP_PRD):
+
+			out = gpG.SAFE_AGG_FALLBACK
+			last_stable = gpG.SAFE_AGG_FALLBACK
+
+			valid_count = 0
+			zero_found = False
+			negative_count = 0
+
+			log_abs_sum = 0.0
+			log_limit = math.log(gpG.SAFE_AGG_MAX)
+
+			if (not isEmpty(pushGenes, sizeMaxDepthIndividual)):
+
+				while (pushGenes > 0):
+
+					# Se revisa el elemento superior, pero todavía NO se saca del stack
+					idx = tidSem * sizeMaxDepthIndividual + (pushGenes - 1)
+					tmp = uStack[idx]
+
+					# Si el valor ya viene desbordado o disparado, se detiene
+					if not safe_is_stable(tmp, gpG.SAFE_AGG_MAX):
+						break
+
+					# Caso cero: el producto se vuelve cero, pero sigue siendo estable
+					if math.fabs(tmp) <= gpG.SAFE_EPS:
+
+						# Se acepta el cero y se saca del stack
+						pushGenes -= 1
+
+						zero_found = True
+						valid_count += 1
+
+						out = 0.0
+						last_stable = out
+
+						# Si ya hay cero, el producto seguirá siendo cero.
+						# Se puede continuar mientras los siguientes valores sean estables.
+						continue
+
+					# Si no hay cero, se calcula el posible nuevo log-producto
+					tentative_log_abs_sum = log_abs_sum + math.log(math.fabs(tmp))
+
+					# Si el nuevo producto se dispararía, se detiene ANTES de usar tmp
+					if tentative_log_abs_sum > log_limit:
+						break
+
+					# Ahora sí se acepta tmp y se saca del stack
+					pushGenes -= 1
+
+					log_abs_sum = tentative_log_abs_sum
+
+					if tmp < 0.0:
+						negative_count += 1
+
+					valid_count += 1
+
+					out = math.exp(log_abs_sum)
+
+					if (negative_count % 2) == 1:
+						out = -out
+
+					# Último valor estable aceptado
+					last_stable = out
+
+				if valid_count > 0:
+
+					out = last_stable
+
+					if (model == 1):
+						stackModel[tidSem * sizeMaxDepthIndividual + pushModel] = inputPop
+						pushModel += 1
+
+					uStack[tidSem * sizeMaxDepthIndividual + pushGenes] = out
+					pushGenes += 1
+
+			continue
+    	# ******************** Es un operador de PROMEDIO SEGURO ******************************
+		# n-ary operator. All elements are extracted from the stack and averaged individually.
+		# Stability checks are performed at each step to prevent NaN and Inf.
+		# The averaging is stopped if a risk (overflow, NaN, Inf) is detected.
+		#***************************************************************************************
+		elif (inputPop == gpG.OP_AVG):
+
+			acc_sum = 0.0
+			out = gpG.SAFE_AGG_FALLBACK
+			last_stable = gpG.SAFE_AGG_FALLBACK
+			valid_count = 0
+
+			if (not isEmpty(pushGenes, sizeMaxDepthIndividual)):
+
+				while (pushGenes > 0):
+
+					# Se revisa el elemento superior, pero todavía NO se saca del stack
+					idx = tidSem * sizeMaxDepthIndividual + (pushGenes - 1)
+					tmp = uStack[idx]
+
+					# Si el valor ya viene desbordado o disparado, se detiene
+					if not safe_is_stable(tmp, gpG.SAFE_AGG_MAX):
+						break
+
+					# Si agregar tmp a la suma dispara el acumulado, se detiene
+					if safe_add_would_overflow(acc_sum, tmp, gpG.SAFE_AGG_MAX):
+						break
+
+					# Ahora sí se acepta tmp y se saca del stack
+					pushGenes -= 1
+
+					acc_sum = acc_sum + tmp
+					valid_count += 1
+
+					out = acc_sum / valid_count
+					last_stable = out
+
+				if valid_count > 0:
+
+					out = last_stable
+     
+					if(math.isnan(out) or math.isinf(out)) :
+						out = gpG.MIN_RMSE
+
+					if (model == 1):
+						stackModel[tidSem * sizeMaxDepthIndividual + pushModel] = inputPop
+						pushModel += 1
+
+					uStack[tidSem * sizeMaxDepthIndividual + pushGenes] = out
+					pushGenes += 1
+
+			continue
+		# *************************** Es un operador de DESVIACION ESTANDAR SEGURA *******************************
+		# n-ary operator. All elements are extracted from the stack and used to calculate the standard deviation.
+		# Welford's algorithm is used for numerical stability.
+		# Stability checks are performed at each step to prevent NaN and Inf.
+		# The calculation is stopped if a risk (overflow, NaN, Inf) is detected.
+		#*********************************************************************************************************
+		elif (inputPop == gpG.OP_SDV):
+
+			out = gpG.SAFE_AGG_FALLBACK
+			last_stable = gpG.SAFE_AGG_FALLBACK
+
+			valid_count = 0
+			mean = 0.0
+			m2 = 0.0
+
+			# Límite interno para la varianza.
+			# Como la desviación estándar final debe estar dentro de SAFE_AGG_MAX,
+			# la varianza no debería superar SAFE_AGG_MAX^2.
+			variance_limit = gpG.SAFE_AGG_MAX * gpG.SAFE_AGG_MAX
+
+			if (not isEmpty(pushGenes, sizeMaxDepthIndividual)):
+
+				while (pushGenes > 0):
+
+					# Se revisa el elemento superior, pero todavía NO se saca del stack
+					idx = tidSem * sizeMaxDepthIndividual + (pushGenes - 1)
+					tmp = uStack[idx]
+
+					# Si el valor ya viene desbordado o disparado, se detiene
+					if not safe_is_stable(tmp, gpG.SAFE_AGG_MAX):
+						break
+
+					x = tmp
+
+					tentative_count = valid_count + 1
+
+					# Welford tentative update
+					delta = x - mean
+
+					# delta puede ser mayor que SAFE_AGG_MAX porque compara dos valores.
+					# Pero si se vuelve no finito, se detiene.
+					if math.isnan(delta) or math.isinf(delta):
+						break
+
+					tentative_mean = mean + (delta / tentative_count)
+
+					if math.isnan(tentative_mean) or math.isinf(tentative_mean):
+						break
+
+					delta2 = x - tentative_mean
+
+					if math.isnan(delta2) or math.isinf(delta2):
+						break
+
+					term = delta * delta2
+
+					if math.isnan(term) or math.isinf(term):
+						break
+
+					if term < 0.0:
+						term = 0.0
+
+					tentative_m2 = m2 + term
+
+					if math.isnan(tentative_m2) or math.isinf(tentative_m2):
+						break
+
+					tentative_variance = tentative_m2 / tentative_count
+
+					if math.isnan(tentative_variance) or math.isinf(tentative_variance):
+						break
+
+					# Si la varianza se dispara, se detiene antes de aceptar tmp
+					if tentative_variance > variance_limit:
+						break
+
+					# Ahora sí se acepta tmp y se saca del stack
+					pushGenes -= 1
+
+					valid_count = tentative_count
+					mean = tentative_mean
+					m2 = tentative_m2
+
+					if valid_count <= 1:
+						out = 0.0
+					else:
+						out = math.sqrt(tentative_variance)
+
+					if not safe_is_stable(out, gpG.SAFE_AGG_MAX):
+						break
+
+					last_stable = out
+
+				if valid_count > 0:
+
+					out = last_stable
+
+					if (model == 1):
+						stackModel[tidSem * sizeMaxDepthIndividual + pushModel] = inputPop
+						pushModel += 1
+
+					uStack[tidSem * sizeMaxDepthIndividual + pushGenes] = out
+					pushGenes += 1
+
+			continue
+		# *************************** Es una condicion de IFMAYOR SEGURA ******************************************
+		# n-ary operator. All elements are extracted from the stack and used to evaluate a condition: 
+  		# if tmp > tmp2 then tmp3 else tmp4
+		# Stability checks are performed on all operands before executing the condition.
+		# The condition is only executed if all operands are stable. Otherwise, the stack remains unchanged.
+		#*********************************************************************************************************
+		elif (inputPop == gpG.OP_IFG):  # IF MAYOR: if tmp > tmp2 then tmp3 else tmp4
+			# IFE requires 4 operands:
+			# tmp = first comparison value
+			# tmp2 = second comparison value
+			# tmp3 = value if the condition is true
+			# tmp4 = value if the condition is false
+   
+			if (pushGenes >= 4):
+
+				base = tidSem * sizeMaxDepthIndividual
+
+				tmp  = uStack[base + pushGenes - 1]
+				tmp2 = uStack[base + pushGenes - 2]
+				tmp3 = uStack[base + pushGenes - 3]
+				tmp4 = uStack[base + pushGenes - 4]
+
+				if (
+					safe_is_stable(tmp,  gpG.SAFE_AGG_MAX) and
+					safe_is_stable(tmp2, gpG.SAFE_AGG_MAX) and
+					safe_is_stable(tmp3, gpG.SAFE_AGG_MAX) and
+					safe_is_stable(tmp4, gpG.SAFE_AGG_MAX)
+				):
+
+					if (tmp > tmp2):
+						out = tmp3
+					else:
+						out = tmp4
+
+					if safe_is_stable(out, gpG.SAFE_AGG_MAX):
+
+						pushGenes -= 4
+
+						uStack[base + pushGenes] = out
+						pushGenes += 1
+
+						if (model == 1):
+							stackModel[base + pushModel] = inputPop
+							pushModel += 1
+
+			continue		
+		# *************************** Es una condicion de IFMENOR SEGURA *****************************************
+		# n-ary operator. All elements are extracted from the stack and used to evaluate a condition:
+  		# if tmp < tmp2 then tmp3 else tmp4
+		# Stability checks are performed on all operands before executing the condition.
+		# The condition is only executed if all operands are stable. Otherwise, the stack remains unchanged.
+		#*********************************************************************************************************
+		elif (inputPop == gpG.OP_IFL):  # IF MENOR: if tmp < tmp2 then tmp3 else tmp4
+			# IFE requires 4 operands:
+			# tmp = first comparison value
+			# tmp2 = second comparison value
+			# tmp3 = value if the condition is true
+			# tmp4 = value if the condition is false
+
+			if (pushGenes >= 4):
+
+				base = tidSem * sizeMaxDepthIndividual
+
+				# Solo se consultan los valores, todavía NO se sacan del stack
+				tmp  = uStack[base + pushGenes - 1]
+				tmp2 = uStack[base + pushGenes - 2]
+				tmp3 = uStack[base + pushGenes - 3]
+				tmp4 = uStack[base + pushGenes - 4]
+
+				# Validación estricta.
+				# Si algo no es válido, no se altera el stack.
+				if (
+					safe_is_stable(tmp,  gpG.SAFE_AGG_MAX) and
+					safe_is_stable(tmp2, gpG.SAFE_AGG_MAX) and
+					safe_is_stable(tmp3, gpG.SAFE_AGG_MAX) and
+					safe_is_stable(tmp4, gpG.SAFE_AGG_MAX)
+				):
+
+					if (tmp < tmp2):
+						out = tmp3
+					else:
+						out = tmp4
+
+					# Validación final de salida
+					if safe_is_stable(out, gpG.SAFE_AGG_MAX):
+
+						# Ahora sí se consumen los 4 operandos
+						pushGenes -= 4
+
+						# Se agrega el resultado al stack
+						uStack[base + pushGenes] = out
+						pushGenes += 1
+
+						# Si manejas stackModel para operadores, puedes activarlo aquí.
+						if (model == 1):
+							stackModel[base + pushModel] = inputPop
+							pushModel += 1
+			continue
+						
+		# *************************** Es una condicion de IFIGUAL SEGURA **********************************
+		# n-ary operator. All elements are extracted from the stack and used to evaluate a condition:
+  		# if tmp ≈ tmp2 then tmp3 else tmp4
+		# Stability checks are performed on all operands before executing the condition.
+		# The condition is only executed if all operands are stable. Otherwise, the stack remains unchanged.
+		# The comparison uses a tolerance (epsilon) to determine if tmp and tmp2 are approximately equal, 
+  		# which is important for floating-point stability.
+		#*********************************************************************************************************
+		elif (inputPop == gpG.OP_IFE):  # IF IGUAL: if tmp ≈ tmp2 then tmp3 else tmp4
+			# IFE requires 4 operands:
+			# tmp = first comparison value
+			# tmp2 = second comparison value
+			# tmp3 = value if the condition is true
+			# tmp4 = value if the condition is false
+
+			if (pushGenes >= 4):
+
+				base = tidSem * sizeMaxDepthIndividual
+
+				# Solo se consultan los valores, todavía NO se sacan del stack
+				tmp  = uStack[base + pushGenes - 1]
+				tmp2 = uStack[base + pushGenes - 2]
+				tmp3 = uStack[base + pushGenes - 3]
+				tmp4 = uStack[base + pushGenes - 4]
+
+				# Validación estricta.
+				# Si algo no es válido, no se altera el stack.
+				if (
+					safe_is_stable(tmp,  gpG.SAFE_AGG_MAX) and
+					safe_is_stable(tmp2, gpG.SAFE_AGG_MAX) and
+					safe_is_stable(tmp3, gpG.SAFE_AGG_MAX) and
+					safe_is_stable(tmp4, gpG.SAFE_AGG_MAX)
+				):
+
+					if safe_float_equal(tmp, tmp2, gpG.SAFE_IF_EPS):
+						out = tmp3
+					else:
+						out = tmp4
+
+					# Validación final de salida
+					if safe_is_stable(out, gpG.SAFE_AGG_MAX):
+
+						# Ahora sí se consumen los 4 operandos
+						pushGenes -= 4
+
+						# Se agrega el resultado al stack
+						uStack[base + pushGenes] = out
+						pushGenes += 1
+
+						# Si manejas stackModel para operadores, puedes activarlo aquí.
+						if (model == 1):
+							stackModel[base + pushModel] = inputPop
+							pushModel += 1
+			continue
+								
 		elif (inputPop == gpG.OP_NOOP or inputPop == gpG.OP_FIN) : #  Es NoOP, no hacemos nada
 			#if (not isEmpty(pushGenes,sizeMaxDepthIndividual)) :
 			out = gpG.MAX_RMSE

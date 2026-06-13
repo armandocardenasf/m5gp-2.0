@@ -17,6 +17,8 @@ from sklearn.model_selection import train_test_split
 ##print("Path to dataset files:", path)
 
 
+#print (gpG.OPERADOR_POR_ID)
+#exit(0)
 #load the data
 #dataset1 = pd.DataFrame(pd.read_csv("/home/treelab/python-codes/data/Concrete/train_10107_1.txt" ,sep='\s+', header=None))
 #dataset1 = pd.DataFrame(pd.read_csv("/home/acardenasf/pmlb/datasets5/589_fri_c2_1000_25/589_fri_c2_1000_25.tsv" ,sep='/s+', header=None))
@@ -28,25 +30,18 @@ from sklearn.model_selection import train_test_split
 
 dsFile = "/home/acardenasf/datasets/1089_USCrime.tsv"
 #dsFile = "/home/acardenasf/datasets/218_house_8L.tsv"
+#dsFile = "/home/acardenasf/datasets/588_fri_c4_1000_100.tsv"
+#dsFile = "/home/acardenasf/datasets/1196_BNG_pharynx.tsv"
+dsFile = "/home/acardenasf/datasets/1096_FacultySalaries.tsv"
 
-dataset1 = pd.DataFrame(pd.read_csv(dsFile ,sep='\t', header=None))
-
+dataset = pd.DataFrame(pd.read_csv(dsFile ,sep='\t', header=None))
 print("Leyo dataset:" , dsFile)
-nrows = len(dataset1.index)
-if (nrows > 10000):
-    print("Hay mas de 10000")
-    #dataset1 = dataset1.iloc[:10000]  #o df.head(10000)
-    dataset1 = dataset1.sample(n=10000, random_state=42)
-
-dataset = dataset1
-
+nrows = len(dataset.index)
 nvar = dataset.shape[1] - 1
-#print("Leyo X")
-X = dataset.iloc[0:nrows, 0:nvar-1]
-y = dataset.iloc[:nrows, nvar-1]
+print("(" + str(nrows) + "," + str(nvar) + ")")
 
-x_train = dataset.iloc[0:nrows, 0:nvar-1].to_numpy().astype(np.float32)
-y_train = dataset.iloc[:nrows, nvar-1].to_numpy().astype(np.float32)
+x_train = dataset.iloc[0:nrows, 0:nvar].to_numpy().astype(np.float32)
+y_train = dataset.iloc[:nrows, nvar].to_numpy().astype(np.float32)
 
 split = True
 if (split): 
@@ -61,6 +56,27 @@ else:
     Y_train = y_train
     X_test = x_train
     Y_test = y_train
+    
+
+
+nrows_Train =len(X_train)
+if (nrows_Train > 10000):
+    print("Hay mas de 10000 registros, se ajusta la muestra a 10000")
+    #dataset1 = dataset1.iloc[:10000]  #o df.head(10000)
+    X_train = X_train[:10000]
+    Y_train = Y_train[:10000]
+    #dataset1 = dataset1.sample(n=14000, random_state=42)
+
+#dataset = dataset1
+
+# nvar = dataset.shape[1] - 1
+# #print("Leyo X")
+# X = dataset.iloc[0:nrows, 0:nvar-1]
+# y = dataset.iloc[:nrows, nvar-1]
+
+# x_train = dataset.iloc[0:nrows, 0:nvar-1].to_numpy().astype(np.float32)
+# y_train = dataset.iloc[:nrows, nvar-1].to_numpy().astype(np.float32)
+
 
 scaled = True
 if (scaled): 
@@ -85,21 +101,21 @@ print(X_train.shape, Y_train.shape)
 print(X_test.shape, Y_test.shape)
 
 
-#functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "abs", "sum","prod", "avg", "std"]
+#functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "abs", "sum","prod", "avg", "std", "if"]
 #Operadores = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "abs"]
 #functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "sqrt", "exp", "log", "abs"]
-functions_set = ["+", "-", "*", "/", "sin", "cos", "tan",  "exp", "sqrt", "log", "std", "avg"]
-#functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "abs"]
+#functions_set = ["+", "-", "*", "/", "sin", "cos", "tan",  "tanh", "exp", "sqrt", "log", "std", "avg", "sum", "prod", "if"]
+functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "abs", "sqrt"]
 
 print('Running m5gp ...')  
  
-est = m5gp( generations=60, # number of generations (limited by default) (40) (30)
+est = m5gp( generations=10, # number of generations (limited by default) (40) (30)
             Individuals=512, # number of individuals (512) (256)
-            GenesIndividuals=160, # number of genes per individual (64) (128)
+            GenesIndividuals=64, # number of genes per individual (64) (128)
             mutationProb=0.1, # mutation rate probability (0.1) (0.1)
-            mutationDeleteRateProb=0.01,  # mutation delete rate probality (0.05) (0.01)
+            mutationDeleteRateProb=0.05,  # mutation delete rate probality (0.05) (0.01)
             sizeTournament=0.15, # size of tournament (0.15) (0.15)
-            evaluationMethod=4,  #error evaluation method (2) (2)
+            evaluationMethod=4,  #error evaluation method (4) (2)
                         # 0=RMSE, 
                         # 1=R2, 
                         #cuML Methods
@@ -135,13 +151,25 @@ est = m5gp( generations=60, # number of generations (limited by default) (40) (3
 
 est.fit(X_train, Y_train)
 
-print("Complexity: ", est.complexity())
+print("\nComplexity: ", est.complexity())
 model = est.get_model()
 print("Model: ",est.get_model())
 #D = simplify(model)
 #print(D)
 
+print("\nPredict using train:")
+yPredicted = est.predict(X_train)
+mse = est.meanSquaredError(Y_train, yPredicted)
+print("mse train: ", mse)
+print("rmse train:", est.rmse(Y_train, yPredicted))
+print ("R^2 train: ", est.R2(Y_train, yPredicted))
+
+print("\nPredict using test:")
 yPredicted = est.predict(X_test)
+mse = est.meanSquaredError(Y_test, yPredicted)
+print("mse test: ", mse)
+print("rmse test:", est.rmse(Y_test, yPredicted))
+print ("R^2 test: ", est.R2(Y_test, yPredicted))
 
 # print('scaling test Y')
 # sc_Y = StandardScaler() 
@@ -152,8 +180,3 @@ yPredicted = est.predict(X_test)
 
 #print("Y Data :\n", y_train)
 #print("Y Predicted:\n", yPredicted)
-
-mse = est.meanSquaredError(Y_test, yPredicted)
-print("mse: ", mse)
-print("rmse:", est.rmse(Y_test, yPredicted))
-print ("R^2: ", est.R2(Y_test, yPredicted))

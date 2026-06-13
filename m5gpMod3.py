@@ -1,8 +1,9 @@
 # *********************************************************************
-# Name: m5gpMod3.py
+# Name: m5gpMod3.py (Classification)
 # Description: Modulo que implementa metodos tipo wrapper para ejecutar
 # metodos CUDA y CuML a traves de llamadas comunes
 # Se implementa la logica de ejecucion para funciones de numba y CuML.
+# para la evaluacion con metodos de clasificacion.
 # *********************************************************************
 
 import math

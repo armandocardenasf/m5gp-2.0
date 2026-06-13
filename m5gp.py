@@ -41,6 +41,7 @@ import m5gpCumlMethods2 as gpCuM2
 import m5gpMod1 as gpM1
 import m5gpMod2 as gpM2
 import m5gpMod3 as gpM3
+#import m5gpSymBuilder as gpSymB
 
 
 """
@@ -102,7 +103,7 @@ class m5gpRegressor(BaseEstimator):
     if not gpG.cudaSetup(0):
       print("Check CUDA device. Fail to initialize.")
       return
-
+    
     # Verifica los operadores validos y construye el diccionario a utilizar
     # para generar la poblacion inicial
     if (len(self.functions_set) == 0):
@@ -115,7 +116,6 @@ class m5gpRegressor(BaseEstimator):
       print("No se especificaron operadores validos")
       exit(0)
   
-
     fName = "M5GP_OpS.csv"
     if os.path.exists(fName):
         os.remove(fName)
@@ -236,8 +236,8 @@ class m5gpRegressor(BaseEstimator):
                               cdf )
     # -- End of Initialize population --
 
-    # print("Individuals:")
-    # print(hInitialPopulation)
+    #print("Individuals (Initial Population):")
+    #print(hInitialPopulation)
     # return
   
     # ***************************  Compute Individuals  ****************************
@@ -373,7 +373,7 @@ class m5gpRegressor(BaseEstimator):
       # print(self.valid_functions_set)
       #print(pesos_por_id)
       #print(op_weights)
-      gpM2.print_pesos_ordenados(pesos_por_id, self.valid_functions_set, gpG.OPERADOR_POR_ID)
+      #gpM2.print_pesos_ordenados(pesos_por_id, self.valid_functions_set, gpG.OPERADOR_POR_ID)
 
       # Prepara la CDF (Cumulative Distribution Function) una vez por generación
       cdf = gpM2.preparar_operadores_numba(
@@ -476,6 +476,7 @@ class m5gpRegressor(BaseEstimator):
       #print(X_train2)
 
       #sacamos el mejor modelo del stack de expresiones 
+      #print("getStackBestModel")
       stackBestModel_p = gpM1.getStackBestModel(
                   self.bestIndividual,
                   X_train,
@@ -490,8 +491,12 @@ class m5gpRegressor(BaseEstimator):
       # Se construye una nueva pila con las todas expresiones 
       # generadas y almacenadas en el stack del mejor modelo
       allStackExpr = gpG.getStackModelExpr(self, stackBestModel_p)
-      
       #print("allStackExpr:")
+      #print(allStackExpr)
+      
+      #allStackExpr = gpG.getStackModelExpr(self, stackBestModel_p)
+      #allStackExpr = gpSymB.getStackModelExpr(self, stackBestModel_p)
+      #print("allStackExpr 2:")
       #print(allStackExpr)
 
       # De la cadena completa de expresiones obtenemos el numero  
@@ -507,11 +512,19 @@ class m5gpRegressor(BaseEstimator):
       # Se crea una nueva pila para guardar las expresiones de cada 
       # elememento del stack y posteriormente formar el modelo tipo M4GP
       nvoModel = [] 
-      m4gpModel = gpG.m4gpModel(self, stackBestModel_p, 
+      # m4gpModel = gpG.m4gpModel(self, stackBestModel_p, 
+      #                           coefArr_p, 
+      #                           intercepArr_p) 
+      # m4gpModel = gpSymB.m4gpModel(self, stackBestModel_p,
+      #                           coefArr_p, 
+      #                           intercepArr_p)  
+      m4gpModel = gpG.m4gpModel(self, stackBestModel_p,
                                 coefArr_p, 
-                                intercepArr_p) 
-      
+                                intercepArr_p)  
+            
       #print("m4gpModel:")
+      #print(m4gpModel)
+      #print("m4gpModel 2:")
       #print(m4gpModel)
 
       #print("self.cuModel.coef_.shape:", self.cuModel.coef_.shape)
@@ -540,6 +553,7 @@ class m5gpRegressor(BaseEstimator):
           nvoModel.insert(0,float(-10003)) 
           nvoModel.insert(0,float(tmp3))
           nvoModel =  gpG.m4gpBuildExpr(tmp1, nvoModel)
+          #nvoModel = gpSymB.m4gpBuildExpr(tmp1, nvoModel)
           if (j >= 1):
             nvoModel.append(-10001)            
       #end for
@@ -556,6 +570,8 @@ class m5gpRegressor(BaseEstimator):
       
       nvoModel.append(-11111)
       self.m4gpModel = np.array(nvoModel)
+      
+      #print("m4gpModel:", self.m4gpModel)
       del nvoModel
     #end if
 
@@ -576,7 +592,7 @@ class m5gpRegressor(BaseEstimator):
 
   def predict(self, X_predict):
     """
-    Genera predicciones utilizando el modelo entrenado de M5GP.
+    Genera predicciones utilizando el modelo entrenado de M5GP Regressor.
 
     Este método aplica la transformación simbólica aprendida por el mejor
     individuo para construir la matriz semántica correspondiente a los datos
@@ -712,6 +728,7 @@ class m5gpRegressor(BaseEstimator):
       model = self.m4gpModel
 
     allModelExpr = gpG.getStackModelExpr(self, model) 
+    #allModelExpr = gpSymB.getStackModelExpr(self, model)
 
     tmpModelExpr = allModelExpr[0]
     tmp = tmpModelExpr.split(':')
@@ -738,6 +755,8 @@ class m5gpRegressor(BaseEstimator):
       model = self.m4gpModel     
 
     allModelExpr = gpG.getStackModelExpr(self, model) 
+    #allModelExpr = gpSymB.getStackModelExpr(self, model)
+    
     tmpModelExpr = allModelExpr[0]
     tmp = tmpModelExpr.split(':')
     nStack = int(tmp[1])
@@ -787,6 +806,7 @@ class m5gpRegressor(BaseEstimator):
   def getStackExpr(self, Model) :
     self.nvar=7
     allModelExpr = gpG.getStackModelExpr(self, Model)
+    #allModelExpr = gpSymB.getStackModelExpr(self, Model)
     print(allModelExpr)
     return
   

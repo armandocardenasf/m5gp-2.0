@@ -40,11 +40,11 @@ def initialize_population (
         hOperators,
         h_cdf ) :
     
-    
-    MaxOcup = gpCuda.gpuMaxUseProc(numIndividuals)
-    blocksize = MaxOcup["BlockSize"]
-    gridsize = MaxOcup["GridSize"]
 
+    MaxOcup = gpCuda.gpuMaxUseProc(numIndividuals)
+    gridsize = MaxOcup["GridSize"]
+    blocksize = MaxOcup["BlockSize"]
+    
     # Initialize a state for each thread
     tiempo = int(repr(int((time.time() % 1)*1000000000))[-6:])
     cu_states = create_xoroshiro128p_states(blocksize*gridsize, seed=tiempo)
@@ -68,13 +68,9 @@ def initialize_population (
     d_cdf = cuda.to_device(h_cdf)
 
     start_time = time.time()
-    
-    #threadsperblock = 32
-    #blockspergrid = (an_array.size + (threadsperblock - 1)) // threadsperblock
-    #increment_by_one[blockspergrid, threadsperblock](an_array)
-
-    print("Blocksize:", blocksize, "Gridsize: ", gridsize)
-    gpCuda.initialize_population[blocksize, gridsize](cu_states,
+      
+    # print( "initialize_population - Gridsize: ", gridsize, "Blocksize:", blocksize)
+    gpCuda.initialize_population[gridsize, blocksize](cu_states,
                                         dInitialPopulation,
                                         numIndividuals,
                                         nvar,
@@ -150,11 +146,12 @@ def compute_individuals(
   memRest = gpG.free_mem-memRequired
   memUsePercent = memRequired/gpG.free_mem
   memUsePercent2 = memUsePercent - math.floor(memUsePercent)
-  # print("memRequired: ",memRequired, "memFree: ", gpG.free_mem)
-  # print("1. memUsePercent: ", memUsePercent, " memUsePercent2: ", memUsePercent2, )
+  
+  #print("memRequired: ",memRequired, "memFree: ", gpG.free_mem)
+  #print("1. memUsePercent: ", memUsePercent, " memUsePercent2: ", memUsePercent2, )
 
   memUsePercent = math.ceil(memUsePercent)
-  # print("2. memUsePercent: ", memUsePercent, " memUsePercent2: ", memUsePercent2, )
+  #print("2. memUsePercent: ", memUsePercent, " memUsePercent2: ", memUsePercent2, )
 
   if (memUsePercent2 > 0.85):
     memUsePercent = memUsePercent + 1
@@ -162,7 +159,7 @@ def compute_individuals(
   if (memUsePercent <= 1) :
     memUsePercent = 1
 
-  # print("3. memUsePercent: ", memUsePercent, " memUsePercent2: ", memUsePercent2, )
+  #print("3. memUsePercent: ", memUsePercent, " memUsePercent2: ", memUsePercent2, )
 
   # We obtain the number of blocks that are necessary to evaluate the population 
   # with respect to the data. The goal is to use no more than 85% of the available 
@@ -197,7 +194,7 @@ def compute_individuals(
   Ops = 0
 
   elapsed1 = time.time() - start_time
-  # print("compute_individuals 1 (" + str(pBlock1) + ")", elapsed1, Ops)
+  #print("compute_individuals 1 (" + str(pBlock1) + ")", elapsed1, Ops)
   #gpG.WriteCSV_OpS("compute_individuals 1 ", elapsed1,Ops)
 
   # If necessary, due to the amount of memory required, 
@@ -214,7 +211,13 @@ def compute_individuals(
 
     hStackBlock = np.zeros((memStackBlock), dtype=np.float32)
     hStackIdxBlock = np.zeros((memStackIdxBlock), dtype=np.float32)
-    hStackModelBlock = np.zeros((sizeModelBlock), dtype=np.float32)
+    
+    #hStackModelBlock = np.zeros((sizeModelBlock), dtype=np.float32)
+    if getStackModel == 1:
+      hStackModelBlock = np.zeros((sizeModelBlock), dtype=np.float32)
+    else:
+      hStackModelBlock = np.zeros((1,), dtype=np.float32)  # Dummy pequeño por si el kernel espera algo
+        
     hOutIndividualsBlock = np.zeros((sizeIndividualsBlock), dtype=np.float32)
     hArrayTmp = np.zeros((numIndividuals), dtype=np.float32)    
 
@@ -231,15 +234,29 @@ def compute_individuals(
     dStackModelBlock = cuda.to_device(hStackModelBlock)
     dArrayTmp = cuda.to_device(hArrayTmp)
         
-    MaxOcup = gpCuda.gpuMaxUseProc(totalSemanticElementsBlock)
-    blocksize = MaxOcup["BlockSize"]
-    gridsize = MaxOcup["GridSize"]    
+    # MaxOcup = gpCuda.gpuMaxUseProc(totalSemanticElementsBlock)
+    # blocksize = MaxOcup["BlockSize"]
+    # gridsize = MaxOcup["GridSize"]    
 
+
+      
     elapsed2 = time.time() - start_time - elapsed1
-    # print("compute_individuals 2 (" + str(pBlock1) + ")", elapsed2,Ops)
+    #print("compute_individuals 2 (" + str(pBlock1) + ")", elapsed2,Ops)
     #gpG.WriteCSV_OpS("compute_individuals 2 ", elapsed2,Ops)
     
-    gpCuda.compute_individuals[blocksize, gridsize](
+    #print("numIndividuals: ", numIndividualsBlock, " ", "totalSemanticElementsBlock:", totalSemanticElementsBlock)
+    if (numIndividualsBlock == 1) :
+      MaxOcup = gpCuda.gpuMaxUseProc(totalSemanticElementsBlock, 1)
+      #print("numIndividuals: ", numIndividualsBlock)
+    else:
+      MaxOcup = gpCuda.gpuMaxUseProc(totalSemanticElementsBlock)
+    
+    blocks_per_grid = MaxOcup["GridSize"]
+    threads_per_block = MaxOcup["BlockSize"]
+    # print( "compute_individuals - Gridsize: ", blocks_per_grid, "Blocksize:", threads_per_block)
+    
+    #print("compute_individuals ("+ str(totalSemanticElementsBlock) + ") - threads_per_block: " + str(threads_per_block) + " blocks_per_grid: " + str(blocks_per_grid))
+    gpCuda.compute_individuals[blocks_per_grid, threads_per_block](
                         dInitialPopulationBlock,
                         dOutIndividualsBlock,
                         dDataTrain,
@@ -254,7 +271,7 @@ def compute_individuals(
                         dArrayTmp
     )
     elapsed3 = time.time() - start_time - elapsed2 - elapsed1
-    # print("compute_individuals 3 (" + str(pBlock1) + ")", elapsed3,Ops)
+    #print("compute_individuals 3 (" + str(pBlock1) + ")", elapsed3,Ops)
     #gpG.WriteCSV_OpS("compute_individuals 3 ", elapsed3,Ops)
 
     cuda.synchronize()
@@ -466,12 +483,16 @@ def compute_individuals2(
             # Dummy pequeño por si el kernel lo requiere como parámetro
             dStackModelBlock = cuda.to_device(np.zeros(1, dtype=np.float32))
 
-        MaxOcup = gpCuda.gpuMaxUseProc(totalSemanticElementsBlock)
-        blocksize = MaxOcup["BlockSize"]
-        gridsize = MaxOcup["GridSize"]
+        # MaxOcup = gpCuda.gpuMaxUseProc(totalSemanticElementsBlock)
+        # blocksize = MaxOcup["BlockSize"]
+        # gridsize = MaxOcup["GridSize"]
 
+        MaxOcup = gpCuda.gpuMaxUseProc(totalSemanticElementsBlock)
+        blocks_per_grid = MaxOcup["GridSize"]
+        threads_per_block = MaxOcup["BlockSize"]
+        
         # ********** Llamada al kernel en GPU **********
-        gpCuda.compute_individuals[blocksize, gridsize](
+        gpCuda.compute_individuals[blocks_per_grid, threads_per_block](
             dInitialPopulationBlock,
             dOutIndividualsBlock,
             dDataTrain,
@@ -589,13 +610,13 @@ def ComputeError(self,
 
     #gridsize = gpCuda.gpuMaxUseProc(self.Individuals, blocksize)
     MaxOcup = gpCuda.gpuMaxUseProc(numIndividuals)
+    gridsize = MaxOcup["GridSize"]
     blocksize = MaxOcup["BlockSize"]
-    gridsize = MaxOcup["GridSize"] 
 
-
+    #print( "Gridsize: ", gridsize, "Blocksize:", blocksize)                                               
     if evaluationMethod == 0 :  #0=RMSE
         #print("RMSE")
-        gpCuda.computeRMSE[blocksize, gridsize](
+        gpCuda.computeRMSE[gridsize, blocksize ](
                         dOutIndividuals, 
                         dDataY, 
                         dFit, 
@@ -613,7 +634,7 @@ def ComputeError(self,
 
         
     elif evaluationMethod == 1 :  #1=R2 :
-        gpCuda.computeR2[blocksize, gridsize](
+        gpCuda.computeR2[gridsize, blocksize](
                         dOutIndividuals, 
                         dDataY, 
                         dFit, 
@@ -688,10 +709,11 @@ def select_tournament(
                     numIndividuals,
                     GenesIndividuals ) :
     
-    MaxOcup = gpCuda.gpuMaxUseProc(numIndividuals)
-    blocksize = MaxOcup["BlockSize"]
-    gridsize = MaxOcup["GridSize"]
 
+    MaxOcup = gpCuda.gpuMaxUseProc(numIndividuals)
+    gridsize = MaxOcup["GridSize"]
+    blocksize = MaxOcup["BlockSize"]
+    
     tiempo = int(repr(int((time.time() % 1)*1000000000))[-6:])
     # Initialize a state for each thread
     cu_states = create_xoroshiro128p_states(blocksize*gridsize, seed=tiempo)
@@ -707,7 +729,8 @@ def select_tournament(
     dFit = cuda.to_device(hFit)
 
     start_time = time.time()
-    gpCuda.parent_select_tournament[blocksize, gridsize](cu_states,
+      
+    gpCuda.parent_select_tournament[gridsize, blocksize](cu_states,
                               dNewPopulation,
                               dInitialPopulation,
                               dFit,
@@ -715,9 +738,6 @@ def select_tournament(
                               gpG.sizeTournament,
                               numIndividuals,
                               GenesIndividuals   )
-
-     
-      
 
     hNewPopulation = dNewPopulation.copy_to_host()
     hBestParentsTournament = dBestParentsTournament.copy_to_host()   
@@ -736,11 +756,11 @@ def umadMutation(self,
                  hBestParentsTournament,
                  numIndividuals,
                  h_cdf) :
-       
-    MaxOcup = gpCuda.gpuMaxUseProc(numIndividuals)
-    blocksize = MaxOcup["BlockSize"]
-    gridsize = MaxOcup["GridSize"]
 
+    MaxOcup = gpCuda.gpuMaxUseProc(numIndividuals)
+    gridsize = MaxOcup["GridSize"] 
+    blocksize = MaxOcup["BlockSize"]
+    
     tiempo = int(repr(int((time.time() % 1)*1000000000))[-6:])
     # Initialize a state for each thread
     cu_states = create_xoroshiro128p_states(blocksize*gridsize, seed=tiempo)
@@ -753,7 +773,8 @@ def umadMutation(self,
     d_cdf = cuda.to_device(h_cdf)
 
     start_time = time.time()
-    gpCuda.umadMutation[blocksize, gridsize](cu_states,
+       
+    gpCuda.umadMutation[gridsize, blocksize](cu_states,
                         dNewPopulation,
                         dInitialPopulation,
                         dBestParentsTournament,
@@ -867,9 +888,10 @@ def replace(self,
 
   # Move new population to Initial population for individuals and Fits 
   MaxOcup = gpCuda.gpuMaxUseProc(self.Individuals)
-  blocksize = MaxOcup["BlockSize"]
   gridsize = MaxOcup["GridSize"]
-  gpCuda.replace[blocksize, gridsize](dInitialPopulation, 
+  blocksize = MaxOcup["BlockSize"]
+  
+  gpCuda.replace[gridsize, blocksize](dInitialPopulation, 
           dNewPopulation, 
           dFit,
           dFitNew, 
@@ -928,10 +950,16 @@ def getStackBestModel(
   #print("hModelPopulation:", hModelPopulation)
   #print("hData:", hData)
 
+  # MaxOcup = gpCuda.gpuMaxUseProc(totalSemanticElements)
+  # blocksize = MaxOcup["BlockSize"]
+  # gridsize = MaxOcup["GridSize"]  
+  # gpCuda.compute_individuals[blocksize, gridsize](
+
   MaxOcup = gpCuda.gpuMaxUseProc(totalSemanticElements)
-  blocksize = MaxOcup["BlockSize"]
-  gridsize = MaxOcup["GridSize"]  
-  gpCuda.compute_individuals[blocksize, gridsize](
+  blocks_per_grid = MaxOcup["GridSize"]
+  threads_per_block = MaxOcup["BlockSize"]
+  
+  gpCuda.compute_individuals[blocks_per_grid, threads_per_block](
                       dModelPopulation,
                       dOutIndividuals,
                       dData,
@@ -964,3 +992,5 @@ def getStackBestModel(
   gc.collect()
 
   return hStackModel
+  
+  
