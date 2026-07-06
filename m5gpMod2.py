@@ -89,6 +89,12 @@ def _rand_u01() -> float:
     # RNG de Numba: usa np.random.random() 
     return float(np.random.random())
 
+#####################################################################################################
+# _searchsorted_left(cdf: np.ndarray, u: float) -> int:
+#  Búsqueda binaria para encontrar el índice j tal que cdf[j-1] < u <= cdf[j].
+# Equivale a np.searchsorted(cdf, u, side='left'), pero implementada manualmente para compatibilidad con nopython.
+# Devuelve un índice válido dentro de cdf.
+#####################################################################################################
 @njit
 def _searchsorted_left(cdf: np.ndarray, u: float) -> int:
     # Búsqueda binaria (equivalente a np.searchsorted(cdf, u, 'left'))

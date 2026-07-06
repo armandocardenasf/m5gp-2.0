@@ -28,11 +28,11 @@ from sklearn.model_selection import train_test_split
 #dataset1 = pd.DataFrame(pd.read_csv("/home/acardenasf/datasets/687_sleuth_ex1605.tsv" ,sep='\t', header=None))
 #dataset1 = pd.DataFrame(pd.read_csv("/home/acardenasf/datasets/218_house_8L.tsv" ,sep='\t', header=None))
 
-dsFile = "/home/acardenasf/datasets/1089_USCrime.tsv"
+#dsFile = "/home/acardenasf/datasets/1089_USCrime.tsv"
 #dsFile = "/home/acardenasf/datasets/218_house_8L.tsv"
 #dsFile = "/home/acardenasf/datasets/588_fri_c4_1000_100.tsv"
-#dsFile = "/home/acardenasf/datasets/1196_BNG_pharynx.tsv"
-dsFile = "/home/acardenasf/datasets/1096_FacultySalaries.tsv"
+dsFile = "/home/acardenasf/datasets/1196_BNG_pharynx.tsv"
+#dsFile = "/home/acardenasf/datasets/1096_FacultySalaries.tsv"
 
 dataset = pd.DataFrame(pd.read_csv(dsFile ,sep='\t', header=None))
 print("Leyo dataset:" , dsFile)
@@ -101,15 +101,16 @@ print(X_train.shape, Y_train.shape)
 print(X_test.shape, Y_test.shape)
 
 
-#functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "abs", "sum","prod", "avg", "std", "if"]
-#Operadores = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "abs"]
-#functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "sqrt", "exp", "log", "abs"]
-#functions_set = ["+", "-", "*", "/", "sin", "cos", "tan",  "tanh", "exp", "sqrt", "log", "std", "avg", "sum", "prod", "if"]
-functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "abs", "sqrt"]
+#functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "Abs", "Add","Mul", "avg", "std", "if"]
+#Operadores = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "Abs"]
+#functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "sqrt", "exp", "log", "Abs"]
+#functions_set = ["+", "-", "*", "/", "sin", "cos", "tan",  "tanh", "exp", "sqrt", "log", "std", "avg", "Add", "Mul", "if"]
+functions_set = ["+", "-", "*", "/", "sin", "cos", "tan", "tanh", "exp", "log", "Abs", "sqrt", "Add"]
+functions_set = ["+", "-", "*", "/", "Mul"]
 
 print('Running m5gp ...')  
  
-est = m5gp( generations=10, # number of generations (limited by default) (40) (30)
+est = m5gp( generations=2, # number of generations (limited by default) (40) (30)
             Individuals=512, # number of individuals (512) (256)
             GenesIndividuals=64, # number of genes per individual (64) (128)
             mutationProb=0.1, # mutation rate probability (0.1) (0.1)

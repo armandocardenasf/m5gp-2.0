@@ -106,6 +106,7 @@ OPERADORES_MASTER = {
     "tan": OP_TAN, # Tangent operator
     "tanh": OP_TANH, # Tangent hyperbolic operador"
     "sqrt": OP_SQRT, # Square_Root
+
     #"if": OP_IF, # Conditional operator
     "if==": OP_IFE, # Conditional special operator equal to (if ==)
     "if>": OP_IFG, # Conditional special operator greater than (if >)
@@ -402,10 +403,10 @@ def getIndividualExpr(config,
             Expr = Expr + "Mul\t"
         elif (gene == OP_AVG) :
             numOpAvg = numOpAvg +1
-            Expr = Expr + "AVG\t"
+            Expr = Expr + "avg\t"
         elif (gene == OP_SDV) :
             numOpSdv = numOpSdv +1
-            Expr = Expr + "SDV\t"
+            Expr = Expr + "sdv\t"
 
         elif (gene == OP_TAN) :
             numOpTan = numOpTan +1
@@ -496,19 +497,58 @@ def getIndividualExpr(config,
     
 #     return Expr
 
-#   Obtiene el gen como expresion, con formato adecuado para variables, constantes y operadores  
+######################################################################################################
+# getGeneExp(config, gene)
+#   Obtiene el gen como expresion, con formato adecuado para variables, constantes y operadores. 
+#   Devuelve la representación textual de un gen usando OPERADOR_POR_ID,
+#   construido a partir de OPERADORES_MASTER.
+#   Si el gen es una variable dentro del rango permitido, devuelve su nombre formateado.
+#   Si el gen es una constante dentro del rango permitido, devuelve su valor formateado.
+#   Si el gen es un operador conocido, devuelve su símbolo.
+#   Si el gen no coincide con ninguna de las categorías anteriores, devuelve su valor formateado.
+#   Esta función es esencial para interpretar los genes de los individuos y construir las expresiones 
+#   correspondientes.
+# #####################################################################################################
 def getGeneExp(config, gene):
-    """
-    Devuelve la representación textual de un gen usando OPERADOR_POR_ID,
-    construido a partir de OPERADORES_MASTER.
-    """
-
+    ###################################################################################################
+    # is_integer_like(value)
+    # Función auxiliar para verificar si un valor es numéricamente entero, lo que es importante para 
+    # formatear correctamente las variables y constantes. Esto asegura que los índices de las variables 
+    # se representen como enteros, y que las constantes se muestren sin decimales innecesarios, lo que 
+    # mejora la legibilidad de las expresiones generadas por el sistema de programación genética.
+    # Por ejemplo, si un gen representa una variable con un valor de -1000.0, esta función ayudará a 
+    # formatearlo como "X_0" en lugar de "X_-1000.0". De manera similar, si un gen representa una constante 
+    # con un valor de 3.0, se formateará como "3" en lugar de "3.0". Esto es crucial para mantener la 
+    # claridad y consistencia en la representación de las expresiones, facilitando su interpretación y análisis.
+    # Además, esta función también maneja casos donde el gen no es un operador, variable o constante 
+    # reconocida, devolviendo su valor formateado para asegurar que cualquier gen desconocido se represente 
+    # de manera legible en las expresiones finales. En resumen, esta función es fundamental para traducir 
+    # los genes numéricos en representaciones textuales claras y consistentes, lo que es esencial para la 
+    # interpretación correcta de los modelos generados por el sistema de programación genética.
+    ###################################################################################################
     def is_integer_like(value):
         try:
             return float(value).is_integer()
         except Exception:
             return False
 
+    #########################################################################################################
+    # Normaliza el gen para asegurar que las variables se traten como enteros y las constantes 
+    # se formateen correctamente. Esto es importante para evitar problemas de formato al construir las 
+    # expresiones, especialmente cuando se combinan variables, constantes y operadores.
+    # Por ejemplo, si un gen representa una variable con un valor de -1000.0, se normaliza a -1000 para
+    # que se formatee como "X_0" en lugar de "X_-1000.0".
+    # De manera similar, si un gen representa una constante con un valor de 3.0, se normaliza a 3 para que 
+    # se formatee como "3" en lugar de "3.0".
+    # Esta normalización ayuda a mantener la claridad y consistencia en la representación de las expresiones, 
+    # lo que es crucial para la interpretación correcta de los modelos generados por el sistema.
+    # Además, esta función también maneja casos donde el gen no es un operador, variable o constante 
+    # reconocida, devolviendo su valor formateado para asegurar que cualquier gen desconocido se represente 
+    # de manera legible en las expresiones finales.
+    # En resumen, esta función es fundamental para traducir los genes numéricos en representaciones textuales 
+    # claras y consistentes, facilitando la interpretación y análisis de los modelos generados por el sistema 
+    # de programación genética.
+    ###########################################################################################################
     def normalize_gene(value):
         try:
             value_f = float(value)
@@ -521,6 +561,15 @@ def getGeneExp(config, gene):
         except Exception:
             return value
 
+    #########################################################################################################
+    # format_number(value):
+    # Función auxiliar para formatear números de manera legible, eliminando decimales innecesarios y manejando
+    # casos especiales como NaN e Inf. Esto es importante para mejorar la legibilidad de las expresiones,
+    # especialmente cuando se combinan variables, constantes y operadores.
+    # Por ejemplo, si un gen representa una constante con un valor de 3.0, se formatea como "3" en lugar de
+    # "3.0". Si un gen tiene un valor de NaN o Inf, se formatea como "0" para evitar problemas en la interpretación
+    # de las expresiones.
+    #########################################################################################################
     def format_number(value):
         try:
             value_f = float(value)
@@ -661,7 +710,7 @@ def getStackModelExpr(config, Model) :
                     tmpExpr= str(cont1 + 2)
                     tmpExpr += ":("
                     tmpExpr += geneExpr 
-                    tmpExpr += "(abs("
+                    tmpExpr += "(Abs("
                     tmpExpr += tmp
                     tmpExpr += "))"
                     tmpExpr += ")"
@@ -674,73 +723,77 @@ def getStackModelExpr(config, Model) :
         # ********* Es un operador de sumatoria  ************/
         elif ((gene == OP_SUM)) :
             #print("Encontro OP_SUM")
-            if (not stackModel.empty()) :
-                tmpExpr = ""
-                Expr = ""
-                ContT = 0
-                    
-                while(stackModel.qsize() > 0 ) :
-                    #print("Encontro expresion: ")
+            if (not stackModel.empty()) and (stackModel.qsize() > 1) : # Se verifica que el stack no este vacio 
+                                                                    # y que al menos haya mas de un elemento
+                                                                    # si hay solo 1, no tiene caso aplicar Add
+                                                                    # Hay al menos 2 elementos para aplicar Add
+                #print("Hay al menos 2 elementos para aplicar Add")
+                tmp = stackModel.get() # Obtenemos un primer elemento del stack de expresiones
+                #print("Expresion obtenida del stack: ", tmp)
+                strCont = tmp[0 : tmp.find(":")] # Obtenemos el numero de elementos que tiene la expresion, 
+                                                 # que se encuentra antes de los dos puntos ":"
+                if (strCont.isnumeric()) : # Verificamos que el numero de elementos sea un numero, para evitar errores
+                    cont1 = int(strCont)
+                    tmp  = tmp[tmp.find(":") + 1 : len(tmp)] # Obtenemos solo la expresion, que se encuentra despues de los dos puntos ":"
+                    tmpExpr = geneExpr  # Se agrega el operador simbolico de Add   
+                    tmpExpr += "("
+                    tmpExpr += tmp # Se agrega la expresion obtenida del stack
+                    tmpExpr += ", " # Se agrega una coma para separar la expresion obtenida del stack de la nueva expresion que se va a agregar
+                
+                ContT = cont1 + 1 # Se inicializa el contador de elementos de la nueva expresion con el numero de elementos de la expresion obtenida del stack + 2, por el operador Add y la nueva expresion que se va a agregar
+                while(stackModel.qsize() > 0 ) : # Se verifica que el stack no este vacio, para seguir obteniendo expresiones y agregandolas a la nueva expresion de Add
                     tmp = stackModel.get() # Se obtiene la ultima expresion de la pila de expresiones
-                    #print(tmp)
-                    strCont = tmp[0 : tmp.find(":")] # obtener el numero de elementos 
-                    if (strCont.isnumeric()) :
-                        cont1 = int(strCont)
-                        ContT += cont1
-                        tmp  = tmp[tmp.find(":") + 1 : len(tmp)] # Obtenemos solo la expresion
-                        #tmpExpr= str(cont1 + 1)
-                        #tmpExpr += ":( ("  
-                        tmpExpr += "("                                             
-                        tmpExpr += tmp
-                        tmpExpr += ")"
-                        if (stackModel.qsize() > 0):
-                            tmpExpr += "+" # geneExpr
-                            ContT += 1
-                            lenIndiv += 1
-                    #end if
-                #end while
-                #tmpExpr= str(ContT)
-                Expr = str(ContT) + ":((" + tmpExpr + ")"
-                #tmpExpr += ":( ("
+                    #print("Expresion obtenida del stack: ", tmp)
+                    strCont = tmp[0 : tmp.find(":")] # obtener el numero de elementos de la expresion, que se encuentra antes de los dos puntos ":"
+                    cont1 = int(strCont)
+                    ContT += cont1
+                    tmp  = tmp[tmp.find(":") + 1 : len(tmp)] # Obtenemos solo la expresion                                           
+                    tmpExpr += tmp
+                    if (stackModel.qsize() > 0):
+                        tmpExpr += ", "    
+                
+                tmpExpr += ")"
+                Expr = str(ContT) + ":(" + tmpExpr + ")"
                 stackModel.put(Expr)
-                #end if
-            # End if
+            #else :
+            #    print("No hay suficientes elementos en el stack para aplicar Add")
+                
 
         # ********* Es un operador de producto  ************/
         elif ((gene == OP_PRD)) :
-            #print("Encontro OP_MUL")
-            if (not stackModel.empty()) :
-                tmpExpr = ""
-                Expr = ""
-                ContT = 0
-                    
-                while(stackModel.qsize() > 0 ) :
-                    #print("Encontro expresion: ")
+            print("Encontro OP_MUL")
+            if (not stackModel.empty()) and (stackModel.qsize() > 1) : # Se verifica que el stack no este vacio 
+                                                                    # y que al menos haya mas de un elemento
+                                                                    # si hay solo 1, no tiene caso aplicar Mul
+                                                                    # Hay al menos 2 elementos para aplicar Mul
+                #print("Hay al menos 2 elementos para aplicar Mul")
+                tmp = stackModel.get() # Obtenemos un primer elemento del stack de expresiones
+                #print("Expresion obtenida del stack: ", tmp)
+                strCont = tmp[0 : tmp.find(":")] # Obtenemos el numero de elementos que tiene la expresion, 
+                                                 # que se encuentra antes de los dos puntos ":"
+                if (strCont.isnumeric()) : # Verificamos que el numero de elementos sea un numero, para evitar errores
+                    cont1 = int(strCont)
+                    tmp  = tmp[tmp.find(":") + 1 : len(tmp)] # Obtenemos solo la expresion, que se encuentra despues de los dos puntos ":"
+                    tmpExpr = geneExpr  # Se agrega el operador simbolico de    
+                    tmpExpr += "("
+                    tmpExpr += tmp # Se agrega la expresion obtenida del stack
+                    tmpExpr += ", " # Se agrega una coma para separar la expresion obtenida del stack de la nueva expresion que se va a agregar
+                
+                ContT = cont1 + 1 # Se inicializa el contador de elementos de la nueva expresion con el numero de elementos de la expresion obtenida del stack + 2, por el operador Add y la nueva expresion que se va a agregar
+                while(stackModel.qsize() > 0 ) : # Se verifica que el stack no este vacio, para seguir obteniendo expresiones y agregandolas a la nueva expresion de Add
                     tmp = stackModel.get() # Se obtiene la ultima expresion de la pila de expresiones
-                    #print(tmp)
-                    strCont = tmp[0 : tmp.find(":")] # obtener el numero de elementos 
-                    if (strCont.isnumeric()) :
-                        cont1 = int(strCont)
-                        ContT += cont1
-                        tmp  = tmp[tmp.find(":") + 1 : len(tmp)] # Obtenemos solo la expresion
-                        #tmpExpr= str(cont1 + 1)
-                        #tmpExpr += ":( ("  
-                        tmpExpr += "("                                             
-                        tmpExpr += tmp
-                        tmpExpr += ")"
-                        if (stackModel.qsize() > 0):
-                            tmpExpr += "*" #getGeneExp(config, gene)
-                            ContT += 1
-                            lenIndiv += 1
-
-                    #end if
-                #end while
-                #tmpExpr= str(ContT)
-                Expr = str(ContT) + ":((" + tmpExpr + ")"
-                #tmpExpr += ":( ("
+                    #print("Expresion obtenida del stack: ", tmp)
+                    strCont = tmp[0 : tmp.find(":")] # obtener el numero de elementos de la expresion, que se encuentra antes de los dos puntos ":"
+                    cont1 = int(strCont)
+                    ContT += cont1
+                    tmp  = tmp[tmp.find(":") + 1 : len(tmp)] # Obtenemos solo la expresion                                           
+                    tmpExpr += tmp
+                    if (stackModel.qsize() > 0):
+                        tmpExpr += ", "    
+                
+                tmpExpr += ")"
+                Expr = str(ContT) + ":(" + tmpExpr + ")"
                 stackModel.put(Expr)
-                #end if
-            # End if
 
         # ********* Es un operador de promedio  ************/
         elif ((gene == OP_AVG)) :
@@ -925,23 +978,26 @@ def m4gpModel(config, Model, Coef, Intercep) :
           # ********* Es un Sumatoria, Producto ************/
         elif ((gene == OP_SUM) or (gene == OP_PRD) ) :
             tmpArr = []
-            if (not stackModel.empty()) :
+            print("Encontro OP_SUM o OP_PRD")
+            
+            if (not stackModel.empty()) and (stackModel.qsize() > 1) :
+                
                 while(stackModel.qsize() > 0 ) :
                     #print("M4gp Encontro expresion: ")
                     tmp = stackModel.get() # Se obtiene la ultima expresion de la pila de expresiones
                     #print(tmp)
                 
                     tmpArr.append(tmp)
-
-                    if (stackModel.qsize() > 0 and gene == OP_SUM ) :
-                        tmpArr.append(OP_ADD)
-                    if (stackModel.qsize() > 0 and gene == OP_PRD ) :
-                        tmpArr.append(OP_MUL)
                 #end while
-
+                
+                if (gene == OP_SUM ) :
+                    tmpArr.append(OP_SUM)
+                if (gene == OP_PRD ) :
+                    tmpArr.append(OP_MUL)
+                
                 stackModel.put(tmpArr)
             #end if
-
+                
           # ********* Promedio ************/
         elif (gene == OP_AVG) :
             tmpArr = []

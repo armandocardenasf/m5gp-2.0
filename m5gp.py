@@ -373,7 +373,7 @@ class m5gpRegressor(BaseEstimator):
       # print(self.valid_functions_set)
       #print(pesos_por_id)
       #print(op_weights)
-      #gpM2.print_pesos_ordenados(pesos_por_id, self.valid_functions_set, gpG.OPERADOR_POR_ID)
+      gpM2.print_pesos_ordenados(pesos_por_id, self.valid_functions_set, gpG.OPERADOR_POR_ID)
 
       # Prepara la CDF (Cumulative Distribution Function) una vez por generación
       cdf = gpM2.preparar_operadores_numba(
@@ -459,7 +459,7 @@ class m5gpRegressor(BaseEstimator):
     #print("Index bestIndividual:")
     #print(indexBestIndividual_p)
     #print("bestIndividual:")
-    #print(self.bestIndividual)
+    print(self.bestIndividual)
 
     # Para caso de evaluaciones utilizando cuML se construye una 
     # expresion utilizando todas expresiones del stack que generan 
@@ -491,8 +491,8 @@ class m5gpRegressor(BaseEstimator):
       # Se construye una nueva pila con las todas expresiones 
       # generadas y almacenadas en el stack del mejor modelo
       allStackExpr = gpG.getStackModelExpr(self, stackBestModel_p)
-      #print("allStackExpr:")
-      #print(allStackExpr)
+      print("allStackExpr:")
+      print(allStackExpr)
       
       #allStackExpr = gpG.getStackModelExpr(self, stackBestModel_p)
       #allStackExpr = gpSymB.getStackModelExpr(self, stackBestModel_p)

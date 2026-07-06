@@ -322,6 +322,13 @@ def gen_rand_variable(cu_states, tid, nvar: float) -> float:
 
 	return gene
 
+######################################################################################################
+# gen_rand_operator(cu_states, tid, operadores, cdf: np.ndarray, useOpIF) -> float:
+# Generate a random operator based on the provided CDF and operator list.
+# This function uses CUDA random number generation to select an operator according to the probabilities 
+# defined in the CDF.
+# If the selected operator is an IF and useOpIF is enabled, it randomly selects a condition for the IF operator.
+######################################################################################################
 @cuda.jit
 def gen_rand_operator(cu_states, tid, operadores, cdf: np.ndarray, useOpIF) -> float:
 	# operador ponderado
@@ -873,13 +880,16 @@ def compute_individuals(inputPopulation: np.ndarray,
 		elif (inputPop == gpG.OP_SUM):
 
 			acc_sum = 0.0
-			out = gpG.SAFE_AGG_FALLBACK
+			out = gpG.SAFE_AGG_FALLBACK 
 			valid_count = 0
 
 			if (not isEmpty(pushGenes, sizeMaxDepthIndividual)):
 
-				while (pushGenes > 0):
+				# Se verifica que al menos haya 2 elementos en el stack para poder hacer la sumatoria
+				if (pushGenes < 2):
+					continue
 
+				while (pushGenes > 0): 
 					# Se revisa el elemento superior, pero todavía NO se saca del stack
 					idx = tidSem * sizeMaxDepthIndividual + (pushGenes - 1)
 					tmp = uStack[idx]
@@ -930,6 +940,10 @@ def compute_individuals(inputPopulation: np.ndarray,
 
 			if (not isEmpty(pushGenes, sizeMaxDepthIndividual)):
 
+				# Se verifica que al menos haya 2 elementos en el stack para poder hacer el producto
+				if (pushGenes < 2):
+					continue
+ 
 				while (pushGenes > 0):
 
 					# Se revisa el elemento superior, pero todavía NO se saca del stack
