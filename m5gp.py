@@ -64,7 +64,7 @@ class m5gpRegressor(BaseEstimator):
             genConstantProb=0.10, 
             genNoopProb=0.001,  
             useOpIF=0,
-            functions_set = ["+", "-", "*", "/", "sin", "cos", "exp", "log", "abs", "sum","prod", "avg", "std"],   
+            functions_set = ["+", "-", "*", "/", "sin", "cos", "exp", "log", "Abs", "Add","Mul", "avg", "std"],   
             log=1, 
             verbose=1, 
             logPath='log/'
