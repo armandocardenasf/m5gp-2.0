@@ -242,6 +242,19 @@ def WriteCSV_OpS(nFun, elapsed,Ops, fCreate=False) :
     #print(f"{nFun} Time lapsed: {elapsed}, Ops: {Ops}, nOpS : {nOpS}")
     return
 
+###################################################################################################
+# construir_lista_operadores_validos(operadores_deseados)
+# Construye una lista de operadores válidos a partir de un conjunto de operadores deseados.
+# Devuelve un array de enteros que representan los IDs de los operadores válidos.
+###################################################################################################
+def construir_lista_operadores_validos(operadores_deseados):
+       
+    # Construir una lista solo con los operadores solicitados
+    diccionario_resultado = [OPERADORES_MASTER[op] for op in operadores_deseados if op in OPERADORES_MASTER]
+    return np.array(diccionario_resultado, dtype=np.int32)
+
+
+
 def Truncate(f, n) :
     return math.floor(f * 10 ** n) / 10 ** n
 
@@ -251,12 +264,6 @@ def is_integer_like(x):
     except Exception:
         return False
     
-def construir_lista_operadores_validos(operadores_deseados):
-       
-    # Construir una lista solo con los operadores solicitados
-    diccionario_resultado = [OPERADORES_MASTER[op] for op in operadores_deseados if op in OPERADORES_MASTER]
-    return np.array(diccionario_resultado, dtype=np.int32)
-
 
 def bestIndividualInfo(config,  
                         dInitialPopulation,  
@@ -761,7 +768,7 @@ def getStackModelExpr(config, Model) :
 
         # ********* Es un operador de producto  ************/
         elif ((gene == OP_PRD)) :
-            print("Encontro OP_MUL")
+            #print("Encontro OP_MUL")
             if (not stackModel.empty()) and (stackModel.qsize() > 1) : # Se verifica que el stack no este vacio 
                                                                     # y que al menos haya mas de un elemento
                                                                     # si hay solo 1, no tiene caso aplicar Mul
@@ -978,7 +985,7 @@ def m4gpModel(config, Model, Coef, Intercep) :
           # ********* Es un Sumatoria, Producto ************/
         elif ((gene == OP_SUM) or (gene == OP_PRD) ) :
             tmpArr = []
-            print("Encontro OP_SUM o OP_PRD")
+            #print("Encontro OP_SUM o OP_PRD")
             
             if (not stackModel.empty()) and (stackModel.qsize() > 1) :
                 
